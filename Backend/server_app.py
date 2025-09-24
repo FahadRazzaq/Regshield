@@ -14,8 +14,6 @@ try:
     import PyPDF2
 except Exception:
     PyPDF2 = None
-
-# Optional better extractor fallback (helps with tricky PDFs)
 try:
     import pdfplumber
 except Exception:
@@ -23,7 +21,7 @@ except Exception:
 
 # ---------- .env (force load + override) ----------
 from dotenv import load_dotenv, find_dotenv
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # <-- fix __file__
 ENV_PATH = find_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(ENV_PATH, override=True)
 
@@ -51,7 +49,7 @@ print(f"[startup] ECC_PATH  = {ECC_PATH} (exists={os.path.exists(ECC_PATH)})")
 
 APP_HOST  = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT  = int(os.getenv("APP_PORT", "8000"))
-ALLOW_ORIGINS = os.getenv("ALLOW_ORIGINS", "http://localhost:5173")
+ALLOW_ORIGINS = os.getenv("ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
 # ---------- Files to index ----------
 PDFS = [
@@ -98,6 +96,7 @@ def normalize_whitespace(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 def split_into_clauses(text: str) -> List[str]:
+    # preserve your earlier anchors (Article numbers, ECC codes, etc.)
     t = text.replace("\r", "")
     t = re.sub(r"\n{3,}", "\n\n", t)
     anchors = re.split(
@@ -116,20 +115,16 @@ def split_into_clauses(text: str) -> List[str]:
     return parts
 
 def guess_reference(chunk: str, source_label: str) -> str:
+    # keep clause/article inference you had
     m = re.search(r"(Article\s+\d+)(?::?\s*([^\n]+)?)?", chunk, re.IGNORECASE)
     if m:
         title = (m.group(2) or "").strip()
         ref = m.group(1).title()
         return f"{ref}" + (f": {title}" if title else "")
-    m2 = re.search(r"\b\d-\d-(?:\d|-){1,6}\b", chunk)
+    m2 = re.search(r"\b\d-\d-(?:\d|-){1,6}\b", chunk)  # ECC code-like
     if m2:
         return m2.group(0)
-    m3 = re.search(r"([A-Za-z][A-Za-z \-/&()]+?)\s+\b\d-\\d\b", chunk)
-    if m3:
-        heading = m3.group(1).strip()
-        code = re.search(r"\b\d-\\d\b", chunk)
-        if code:
-            return f"{heading} {code.group(0)}"
+    # fallback: first words
     words = chunk.split()
     return " ".join(words[:8]) + ("..." if len(words) > 8 else "")
 
@@ -220,12 +215,7 @@ def score_clause(clause: Clause, query_tokens, phrase: str) -> float:
         score += 3.0
     ref = clause.reference.lower()
     score += sum(1.5 for t in query_tokens if t in ref)
-    qset = set(query_tokens)
-    src = clause.source.lower()
-    if any(w in qset for w in ["breach","notify","notification","72","hours","consent","data","subject","rights"]) and "pdpl" in src:
-        score += 0.5
-    if any(w in qset for w in ["incident","nca","ecc","logging","siem","report","threat","encryption","cryptography"]) and "ecc" in src:
-        score += 0.5
+    # (keep your earlier optional source-boosts if you want them back)
     return float(score)
 
 # ---------- Semantic / Hybrid (fast model + caching) ----------
@@ -336,23 +326,24 @@ class Method(str, Enum):
     semantic = "semantic"
     hybrid = "hybrid"
 
-app = FastAPI(title="Regulation Clause Search API", version="0.3.0")
+# Robust CORS parsing
+raw = ALLOW_ORIGINS or ""
+origins = ["*"] if raw.strip() == "*" else [o.strip() for o in re.split(r"[,;\s]+", raw) if o.strip()]
+print(f"[startup] ALLOW_ORIGINS parsed: {origins}")
 
-# CORS for local dev
-origins = ["*"] if ALLOW_ORIGINS.strip() == "*" else [o.strip() for o in ALLOW_ORIGINS.split(",")]
+app = FastAPI(title="Regulation Clause Search API", version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["Content-Type", "Authorization"],
 )
 
 @app.on_event("startup")
 def _startup():
-    # Build the lexical index right away (fast)
     ensure_index()
-    # Kick off embeddings in the background so startup isn't blocked
     def _bg():
         try:
             build_embeddings()
@@ -416,10 +407,8 @@ def reindex():
             os.remove(EMB_PATH)
     except Exception:
         pass
-    # kick a background build again
     threading.Thread(target=build_embeddings, daemon=True).start()
     return {"status": "ok", "count": len(INDEX)}
 
-if __name__ == "__main__":
-    # Tip: when not actively editing, run without reload for faster startup
+if __name__ == "__main__":  # <-- fix __name__
     uvicorn.run("server_app:app", host=APP_HOST, port=APP_PORT, reload=True)
