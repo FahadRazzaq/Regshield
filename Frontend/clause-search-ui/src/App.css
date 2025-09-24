@@ -1,103 +1,199 @@
-/* #root {
-  max-width: 1280px;
+/* ===== Base ===== */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+/* Make sure every top-level wrapper uses the same light background */
+:root { --page-bg: #f8fafc; --ink: #0f172a; --header-h: 0px; }
+html, body, #root, .app, main, .page, section { background: var(--page-bg) !important; }
+
+/* If some earlier CSS set a dark bg on generic divs, neutralize only full-bleed ones */
+div[style*="position: fixed"],
+div[style*="position: absolute"] { background: transparent !important; }
+
+body {
+  /* Safe top padding so nothing looks cut under browser bars */
+  padding-top: max(20px, env(safe-area-inset-top));
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-x: hidden;
+}
+
+/* ===== Layout ===== */
+.page {
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 28px 20px 28px;
+  position: relative;
+  /* Ensure first child margins don’t collapse out of the page */
+  padding-top: calc(24px + var(--header-h) + env(safe-area-inset-top, 0px));
 }
+.page > :first-child { margin-top: 0; }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
+.header { position: static; background: transparent; }
+.header h1 { margin: 0 0 8px; font-size: 26px; }
+.muted { color: #6b7280; } /* slate-500 */
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-} */
-
-
-/* layout */
-.page { max-width: 1000px; margin: 0 auto; padding: 24px; }
-.header h1 { margin: 0; font-size: 24px; }
-.muted { color: #6b7280; }
-
-/* toolbar */
+/* ===== Toolbar (search area) ===== */
 .toolbar {
   display: grid;
-  grid-template-columns: 1fr 160px;
+  grid-template-columns: 1fr 240px;
   gap: 16px;
-  margin-top: 20px;
+  margin-top: 18px;
   align-items: end;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.03);
+  overflow: visible;
 }
-.toolbar .field { display: flex; flex-direction: column; gap: 6px; }
-.toolbar .field.small { width: 160px; }
-.label { font-size: 13px; color: #374151; }
-.input {
-  border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px;
-  outline: none;
-}
-.input:focus { border-color: #111827; }
+.toolbar .field { display: flex; flex-direction: column; gap: 8px; }
+.toolbar .field.small { width: 240px; }
 
-/* chips */
+.label { font-size: 13px; font-weight: 600; color: #334155; }
+
+.input {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #ffffff;
+  color: var(--ink);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input::placeholder { color: #64748b; }
+.input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+}
+
+/* ===== Chips ===== */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
-  border: 1px solid #e5e7eb; background: #fff; border-radius: 999px;
-  padding: 6px 10px; font-size: 13px; cursor: pointer;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s ease, transform .05s ease;
 }
-.chip--on { background: #111827; color: #fff; }
+.chip:hover { background: #f3f4f6; }
+.chip:active { transform: translateY(1px); }
+.chip--on { background: #111827; color: #ffffff; border-color: #111827; }
 
-/* results */
-.resultsHead { margin-top: 16px; }
-.grid { display: grid; gap: 12px; margin-top: 12px; }
+/* ===== Results ===== */
+.resultsHead { margin-top: 20px; }
+.grid { display: grid; gap: 16px; margin-top: 14px; }
 
 .card {
-  border: 1px solid #e5e7eb; background: #fff; border-radius: 14px;
-  padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.04);
+  overflow: visible;
 }
 .card__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.card__title { font-weight: 600; }
-.score { font-size: 12px; color: #6b7280; }
-.badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.card__title { font-weight: 700; color: var(--ink); }
+.score { font-size: 12px; color: #475569; }
+.badges { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .badge {
-  display: inline-block; border: 1px solid #e5e7eb; border-radius: 999px;
-  padding: 2px 8px; font-size: 12px; color: #374151;
+  display: inline-block;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #334155;
+  background: #f9fafb;
 }
-.card__text { margin-top: 10px; line-height: 1.6; font-size: 15px; }
-.card__actions { margin-top: 10px; }
-.btn { border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.card__text { margin-top: 12px; line-height: 1.75; font-size: 15px; color: #111827; }
+.card__actions { margin-top: 14px; display: flex; gap: 10px; }
 
-.info { margin-top: 16px; color: #6b7280; }
+/* ===== Buttons ===== */
+.btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.btn:hover { background: #f3f4f6; }
+.btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.2); }
+.btn--primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+.btn--primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+/* ===== Info / Error ===== */
+.info { margin-top: 16px; color: #475569; }
 .error {
-  margin-top: 16px; border: 1px solid #fecaca; background: #fef2f2;
-  color: #991b1b; padding: 10px; border-radius: 10px; font-size: 14px;
+  margin-top: 16px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
 }
 
-/* uploader */
-.uploader { margin-top: 14px; }
-.uploader__row { margin-top: 8px; display: flex; gap: 10px; align-items: center; }
+/* ===== Uploader ===== */
+.uploader { margin-top: 16px; }
+.uploader__row { margin-top: 10px; display: flex; gap: 12px; align-items: center; }
+
+/* ===== Fixed header hook (set --header-h if you actually have one) ===== */
+.app-header {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0; right: 0;
+  height: var(--header-h);
+  z-index: 1000;
+  background: var(--page-bg);
+}
+
+/* ===== Anchor scroll offset ===== */
+html { scroll-padding-top: calc(16px + var(--header-h) + env(safe-area-inset-top, 0px)); }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .toolbar { grid-template-columns: 1fr; }
+  .toolbar .field.small { width: 100%; }
+  .page { padding: 24px 14px 24px; }
+}
+/* --- Top cut fix --- */
+:root{
+  /* If you have a fixed header, set its height here (0 if none) */
+  --header-h: 0px;
+}
+
+/* Ensure the scroll container doesn't collapse top margins */
+html, body, #root { height: 100%; margin: 0; }
+#root, .page { position: relative; }
+
+/* Give the page real padding at the top (not margin) and include any safe area / header */
+.page {
+  padding-top: calc(24px + var(--header-h) + env(safe-area-inset-top, 0px));
+}
+
+/* Stop the first child’s margin from collapsing out of .page */
+.page > :first-child { margin-top: 0; }
+
+/* If you *do* have a fixed header element, make it explicit */
+.app-header {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0; right: 0;
+  height: var(--header-h);
+  z-index: 1000;
+}
+
+/* Optional: when scrolling to anchors, keep them below the header */
+html { scroll-padding-top: calc(16px + var(--header-h) + env(safe-area-inset-top, 0px)); }
+
+
