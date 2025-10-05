@@ -1,0 +1,205 @@
+:root{
+  --bg:#f7f7fb; --card:#fff; --ink:#111; --muted:#666; --brand:#2b6cb0;
+  --border:#e6e6ef; --ok:#0a5f2b; --warn:#9a6a00; --err:#a61b1b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+a{color:var(--brand);text-decoration:none}
+
+.pc-header{
+    position:sticky;background:#ffffffcc;border-bottom:1px solid var(--border);top:0; backdrop-filter:saturate(140%) blur(6px);
+}
+.pc-header .wrap{
+    max-width:1200px;margin:0 auto;padding:14px 18px;display:flex;gap:16px;align-items:center;justify-content:space-between
+}
+.logo-header{
+    display: flex; flex-direction: row; align-items: center;
+}
+.pc-header h1{
+    font-size:18px;margin:0; padding-left: 10px;
+}
+
+.pc-main{
+    max-width:1200px;margin:24px auto;padding:0 18px
+}
+
+.uploader{
+    background:var(--card);border:1px solid var(--border);border-radius:0px;padding:16px
+}
+.file-row{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap
+}
+.file-row input[type=file]{
+    flex:1;
+}
+.file-row select,.file-row input[type=number]{
+    width:140px;padding:8px;border:1px solid var(--border);border-radius:5px
+}
+
+.btn{
+    border:1px solid var(--brand);background:#2563eb;color:#fff;padding:9px 12px;border-radius:5px;cursor:pointer; font-weight: 600;
+}
+.btn:disabled{
+    opacity:.6;cursor:not-allowed
+}
+.hint{
+    color:var(--muted);margin:.5rem 0 0
+}
+
+.status{
+    margin-top:8px;color:var(--muted)
+}
+.error{
+    margin-top:8px;color:var(--err)
+}
+
+.results{
+    margin-top:18px;display:grid;grid-template-columns:1fr;gap:14px
+}
+.card{
+    background:#fff;border:1px solid var(--border);border-radius:0px;padding:14px
+}
+.card h3{
+    margin:0 0 8px 0;font-size:16px
+}
+.card .meta{
+    color:var(--muted);font-size:13px;margin-bottom:8px
+}
+
+.grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px
+}
+.col{
+    border:1px dashed var(--border);border-radius:0px;padding:10px;background:#fafafe
+}
+.col h4{
+    margin:0 0 6px 0;font-size:14px
+}
+.text{
+    white-space:pre-wrap;
+    padding: 10px;
+}
+.card .grid .col:first-child .text{
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+}
+.card .grid .col:first-child .text::after{
+  content: "";
+  display: block;
+  height: 1px;
+  margin: var(--space-3) 0 var(--space-2);
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+.matches{
+    display:flex;flex-direction:column;gap:8px;margin-top:8px
+}
+.badge{
+    display:inline-block;background:#eaf0fe;border:1px solid #dbe7ff;color:#204a84;padding:2px 8px;border-radius:0px;font-size:12px;margin-right:6px;
+    padding:15px;
+}
+
+.markdown{
+    margin-top:10px;border-top:1px solid var(--border);padding-top:10px
+}
+.markdown table{
+    width:100%;border-collapse:collapse
+}
+.markdown th{
+    border:1px solid var(--border);padding:10px;text-align:left
+}
+
+.markdown td{
+    border:1px solid var(--border);padding:20px;text-align:left;
+    text-align:left
+}
+.markdown th{
+    background:#f3f6ff
+}
+
+/* ===== Pretty "Choose File" control ===== */
+input[type="file"]{
+  color: var(--muted);
+  padding: 8px 10px;            /* space around filename text */
+  border-radius: px;
+  width: 100%;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+input[type="file"]:hover{
+  border-color: color-mix(in oklab, var(--brand) 35%, var(--border));
+}
+input[type="file"]:focus-visible{
+  border-color: var(--brand);
+}
+
+/* The actual button */
+input[type="file"]::file-selector-button{
+  margin-right: 12px;
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+  padding: 9px 12px 9px 36px;   /* left space for icon */
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+
+  /* tiny upload icon (inline SVG) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 3l-5 5h3v4h4V8h3l-5-5z'/%3E%3Cpath d='M5 18h14v2H5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  background-size: 18px 18px;
+}
+
+.search-navigate{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.semi-bold-link {
+  font-weight: 600; /* This sets the text to semi-bold */
+    text-decoration-line: underline;
+
+}
+/* Small screens: keep it tidy */
+@media (max-width: 520px){
+  input[type="file"]{
+    font-size: 14px;
+  }
+}
+
+/* ===== Loading overlay (scoped) ===== */
+.loader-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;                 /* shown when JS clears inline display:none */
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 15, 25, .35);
+  backdrop-filter: blur(2px);
+}
+
+.loader-box{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  min-width: 240px;
+}
+
+.spinner{
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in oklab, var(--brand) 15%, transparent);
+  border-top-color: var(--brand);
+  margin: 0 auto 10px;
+  animation: pc-spin .8s linear infinite;
+}
+
+@keyframes pc-spin{ to { transform: rotate(360deg); } }

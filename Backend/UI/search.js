@@ -90,7 +90,9 @@ form.addEventListener("submit", async (e) => {
         </div>
         <div class="text">${highlight(c.text || "", q)}</div>
         <div class="actions">
-          <button class="btn" type="button">Copy citation</button>
+          <button class="btn" type="button">Copy citation
+          <img src="copy.png" width="16" height="16" alt="Description of the image"> 
+          </button>
         </div>
       `;
       card.querySelector(".btn").addEventListener("click", () => copy(citation));

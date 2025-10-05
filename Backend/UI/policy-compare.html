@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Policy vs Regulations — Compare</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./policy-compare.css" />
+    <script>
+      // Gate behind auth just like index.html
+      const BACKEND_URL = "http://127.0.0.1:5001";
+      function getToken(){ return localStorage.getItem("token") || sessionStorage.getItem("token"); }
+      async function ensureAuth(){
+        const t = getToken();
+        if (!t){ location.replace("login.html?from=policy-compare.html"); return; }
+        try {
+          const r = await fetch(`${BACKEND_URL}/auth/me`, { headers: { Authorization: `Bearer ${t}` }});
+          if (!r.ok) throw new Error("invalid");
+          window.__AUTH_OK__ = true;
+        } catch {
+          localStorage.removeItem("token"); sessionStorage.removeItem("token");
+          location.replace("login.html?from=policy-compare.html");
+        }
+      }
+      document.documentElement.style.visibility="hidden";
+      ensureAuth().finally(()=>{ document.documentElement.style.visibility=""; });
+    </script>
+  </head>
+  <body>
+    <header class="pc-header">
+      <div class="wrap">
+        <div class="logo-header">
+            <img src="LOGO-REG.PNG" width="40" height="40" alt="Description of the image">
+            <h1>Policy ⇄ Regulation Comparison</h1>
+        </div>
+        <div class="search-navigate">
+        <nav>
+                <a href="index.html"  class="semi-bold-link">CLAUSE SEARCH</a>
+            </nav>
+            
+        </div>
+      </div>
+    </header>
+
+    <main class="pc-main">
+      <section class="uploader">
+        <form id="uploadForm">
+          <div class="file-row">
+            <input id="file" type="file" accept=".pdf,.docx,.txt" required />
+            <select id="method">
+              <option value="hybrid" selected>hybrid</option>
+              <option value="semantic">semantic</option>
+              <option value="lexical">lexical</option>
+            </select>
+            <input id="topk" type="number" min="1" max="8" value="3" />
+            <button class="btn btn-primary" type="submit">Compare</button>
+          </div>
+          <p class="hint">Upload a policy document (PDF/DOCX/TXT). We’ll match each section to PDPL/ECC clauses and ask Gemini to compare side-by-side.</p>
+        </form>
+        <div id="status" class="status"></div>
+        <div id="error" class="error" role="alert"></div>
+      </section>
+
+      <section id="results" class="results" aria-live="polite"></section>
+    </main>
+
+    <script src="./policy-compare.js"></script>
+
+    
+  </body>
+</html>
