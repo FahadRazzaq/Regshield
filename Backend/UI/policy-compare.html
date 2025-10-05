@@ -33,8 +33,10 @@
             <h1>Policy ⇄ Regulation Comparison</h1>
         </div>
         <div class="search-navigate">
-        <nav>
-                <a href="index.html"  class="semi-bold-link">CLAUSE SEARCH</a>
+        <nav class="top-links">
+                <a href="index.html"  class="semi-bold-link">Clause Search</a>
+                <button id="logoutBtn" class="logout-btn" type="button" title="Log out">Log out</button>
+
             </nav>
             
         </div>
@@ -64,7 +66,20 @@
     </main>
 
     <script src="./policy-compare.js"></script>
-
+    <script>
+      (function () {
+        function logout() {
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+          // send to login; include ?from= so you come back to compare after re-login
+          window.location.assign('login.html?from=policy-compare.html');
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+          var btn = document.getElementById('logoutBtn');
+          if (btn) btn.addEventListener('click', logout);
+        });
+      })();
+    </script>
     
   </body>
 </html>

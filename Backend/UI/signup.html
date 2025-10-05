@@ -2,32 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>RegShield — Login</title>
+  <title>RAG.AI Console — Sign Up</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
+  <!-- Reuse the login stylesheet -->
   <link rel="stylesheet" href="./login.css" />
 </head>
 <body>
   <main class="login-container">
-    <section class="login-box" aria-labelledby="loginTitle">
+    <section class="login-box" aria-labelledby="signupTitle">
       <!-- Brand / Logo -->
       <div class="brand">
         <img
           class="brand-logo"
-          src="LOGO-REG.PNG"
+          src="https://dummyimage.com/96x96/1877f2/ffffff.png&text=AI"
           alt="RAG.AI Logo"
           width="72"
           height="72"
           loading="eager"
         />
         <div class="brand-text">
-          <h1 id="loginTitle" class="brand-title">RegShield</h1>
-          <p class="brand-subtitle">Sign in to continue</p>
+          <h1 id="signupTitle" class="brand-title">Create your account</h1>
+          <p class="brand-subtitle">Sign up to continue</p>
         </div>
       </div>
 
       <!-- Form -->
-      <form id="loginForm" class="login-form" novalidate>
+      <form id="signupForm" class="login-form" novalidate>
+        <div class="input-group">
+          <label for="username">Username</label>
+          <input autocomplete="username" type="text" id="username" name="username" placeholder="yourname" required />
+        </div>
+
         <div class="input-group">
           <label for="email">Email</label>
           <input autocomplete="email" type="email" id="email" name="email" placeholder="you@example.com" required />
@@ -36,8 +42,16 @@
         <div class="input-group">
           <label for="password">Password</label>
           <div class="password-wrap">
-            <input autocomplete="current-password" type="password" id="password" name="password" placeholder="••••••••" required />
+            <input autocomplete="new-password" type="password" id="password" name="password" placeholder="••••••••" required />
             <button type="button" class="toggle-pass" aria-controls="password" aria-label="Show password">Show</button>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="confirm">Confirm Password</label>
+          <div class="password-wrap">
+            <input autocomplete="new-password" type="password" id="confirm" name="confirm" placeholder="••••••••" required />
+            <button type="button" class="toggle-pass-2" aria-controls="confirm" aria-label="Show password">Show</button>
           </div>
         </div>
 
@@ -46,22 +60,18 @@
             <input type="checkbox" id="remember" checked />
             <span>Remember me</span>
           </label>
-          <a class="forgot" href="/forgot-password">Forgot password?</a>
+          <a class="forgot" id="loginLink" href="login.html">Have an account? Log in</a>
         </div>
 
         <p id="errorBox" class="error-message" role="alert" aria-live="polite"></p>
 
         <button type="submit" id="submitBtn" class="login-button">
-          <span class="btn-text">Log In</span>
+          <span class="btn-text">Create account</span>
         </button>
       </form>
-
-      <p class="signup-link">
-        Don’t have an account? <a href="/signup">Sign Up</a>
-      </p>
     </section>
   </main>
 
-  <script src="./login.js"></script>
+  <script src="./signup.js"></script>
 </body>
 </html>

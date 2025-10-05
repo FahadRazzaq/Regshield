@@ -56,7 +56,8 @@
         </div>
       </div>
       <nav class="top-links">
-          <a href="policy-compare.html"  class="semi-bold-link">POLICY COMPARE</a>
+          <a href="policy-compare.html"  class="semi-bold-link">Policy Compare</a>
+          <button id="logoutBtn" class="logout-btn" type="button" title="Log out">Log out</button>
       </nav>
     </div>
   </header>
@@ -111,5 +112,20 @@
   </main>
 
   <script src="./search.js"></script>
+  <script>
+  (function () {
+    function logout() {
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
+      // back to login (you can include ?from= if you want to bounce back here)
+      window.location.assign('login.html');
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      var btn = document.getElementById('logoutBtn');
+      if (btn) btn.addEventListener('click', logout);
+    });
+  })();
+</script>
+
 </body>
 </html>

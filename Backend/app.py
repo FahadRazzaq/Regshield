@@ -73,6 +73,18 @@ def ui_policy_compare_css():
 def ui_policy_compare_js():
     return send_from_directory(UI_DIR, "policy-compare.js")
 
+@app.route("/signup")
+def ui_signup_root():
+    return send_from_directory(UI_DIR, "signup.html")
+
+@app.route("/signup.html")
+def ui_signup_html():
+    return send_from_directory(UI_DIR, "signup.html")
+
+@app.route("/signup.js")
+def ui_signup_js():
+    return send_from_directory(UI_DIR, "signup.js")
+
 ALLOWED_EXTS = {"pdf", "docx", "txt"}
 
 def _ext(filename: str) -> str:

@@ -3,7 +3,7 @@
   --border:#e6e6ef; --ok:#0a5f2b; --warn:#9a6a00; --err:#a61b1b;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
 a{color:var(--brand);text-decoration:none}
 
 .pc-header{
@@ -37,13 +37,14 @@ a{color:var(--brand);text-decoration:none}
 }
 
 .btn{
-    border:1px solid var(--brand);background:#2563eb;color:#fff;padding:9px 12px;border-radius:5px;cursor:pointer; font-weight: 600;
+    border:1px solid var(--brand);background:#2a567c;color:#fff;padding:9px 12px;border-radius:5px;cursor:pointer; font-weight: 600;
 }
 .btn:disabled{
     opacity:.6;cursor:not-allowed
 }
 .hint{
-    color:var(--muted);margin:.5rem 0 0
+    color:var(--muted);margin:.5rem 0 0;
+    margin-left: 0.5rem;
 }
 
 .status{
@@ -138,7 +139,7 @@ input[type="file"]:focus-visible{
 input[type="file"]::file-selector-button{
   margin-right: 12px;
   border: 0;
-  background: #2563eb;
+  background: #2a567c;
   color: #fff;
   padding: 9px 12px 9px 36px;   /* left space for icon */
   border-radius: 5px;
@@ -160,9 +161,12 @@ input[type="file"]::file-selector-button{
 
 .semi-bold-link {
   font-weight: 600; /* This sets the text to semi-bold */
-    text-decoration-line: underline;
-
+  margin-right: 1rem;
+color: #2a567c;
 }
+
+.top-links{display:flex;flex-direction: row;align-items: center;gap:12px;font-size:16px}
+
 /* Small screens: keep it tidy */
 @media (max-width: 520px){
   input[type="file"]{
@@ -170,36 +174,26 @@ input[type="file"]::file-selector-button{
   }
 }
 
-/* ===== Loading overlay (scoped) ===== */
-.loader-overlay{
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;                 /* shown when JS clears inline display:none */
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 15, 25, .35);
-  backdrop-filter: blur(2px);
-}
-
-.loader-box{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 18px;
-  box-shadow: var(--shadow-lg);
-  text-align: center;
-  min-width: 240px;
-}
-
-.spinner{
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 3px solid color-mix(in oklab, var(--brand) 15%, transparent);
-  border-top-color: var(--brand);
-  margin: 0 auto 10px;
-  animation: pc-spin .8s linear infinite;
-}
 
 @keyframes pc-spin{ to { transform: rotate(360deg); } }
+
+
+.logout-btn{
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  color: var(--ink, #111827);
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease;
+  text-align: center;
+  font-size: 16px;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif
+}
+.logout-btn:hover{
+  color: #2a567c;
+  background: rgba(69, 116, 255, 0.06);
+}
+.logout-btn:active{
+  transform: translateY(1px);
+}

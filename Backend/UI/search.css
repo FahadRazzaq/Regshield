@@ -1,4 +1,4 @@
-:root { --bg:#f6f7fb; --ink:#0f172a; --muted:#5f6b7a; --card:#fff; --line:#e5e7eb; --brand:#2563eb; }
+:root { --bg:#f6f7fb; --ink:#0f172a; --muted:#5f6b7a; --card:#fff; --line:#e5e7eb; --brand:#2a567c; }
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 a{color:var(--brand);text-decoration:none}
@@ -8,7 +8,7 @@ a{color:var(--brand);text-decoration:none}
 .brand{display:flex;align-items:center;gap:10px}
 /* .brand .logo{width:28px;height:28px;border-radius:6px;background:var(--brand)} */
 .brand h1{font-size:18px;margin:0}
-.top-links{display:flex;gap:12px;font-size:14px}
+.top-links{display:flex;flex-direction: row;align-items: center;gap:12px;font-size:16px}
 /* Layout */
 .page{max-width:1100px;margin:0 auto;padding:18px 16px 40px}
 .toolbar{background:var(--card);border:1px solid var(--line);border-radius:0px;padding:14px;display:grid;grid-template-columns:1fr 140px 160px 120px;gap:12px}
@@ -51,6 +51,25 @@ mark{background:#fff59d}
 
 .semi-bold-link {
   font-weight: 600; /* This sets the text to semi-bold */
-  text-decoration-line: underline;
+  margin-right: 1rem;
 
+}
+
+/* Logout button */
+.logout-btn{
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  color: var(--ink, #111827);
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease;
+  text-align: center;
+}
+.logout-btn:hover{
+  color: var(--err, #2a567c);
+  background: rgba(69, 116, 255, 0.06);
+}
+.logout-btn:active{
+  transform: translateY(1px);
 }
