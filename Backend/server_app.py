@@ -21,21 +21,18 @@ except Exception:
 
 # ---------- .env (force load + override) ----------
 from dotenv import load_dotenv, find_dotenv
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # <-- fix __file__
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = find_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(ENV_PATH, override=True)
 
 def resolve_env_or_default(key: str, default_filename: str) -> str:
     val = os.environ.get(key)
-    # absolute path?
     if val and os.path.isabs(val) and os.path.exists(val):
         return val
-    # if provided (possibly "Backend/PDPL.pdf"), try relative to this file
     if val:
         cand = os.path.normpath(os.path.join(BASE_DIR, val))
         if os.path.exists(cand):
             return cand
-        # try project root (one level up), just in case
         cand2 = os.path.normpath(os.path.join(os.path.dirname(BASE_DIR), val))
         if os.path.exists(cand2):
             return cand2
@@ -51,6 +48,10 @@ APP_HOST  = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT  = int(os.getenv("APP_PORT", "8000"))
 ALLOW_ORIGINS = os.getenv("ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
+# === Gemini config (optional) ===
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+
 # ---------- Files to index ----------
 PDFS = [
     (PDPL_PATH, "PDPL (Implementing Regulation)"),
@@ -59,12 +60,11 @@ PDFS = [
 
 # ---------- Read PDF ----------
 def read_pdf_text(path: str) -> List[Tuple[int, str]]:
-    """Return list[(page_no, text)] with non-empty text."""
+    """Return list[(page_no, text)] with non-empty text (raw page text with line breaks)."""
     pages: List[Tuple[int, str]] = []
     if not os.path.exists(path):
         return pages
 
-    # Try PyPDF2
     if PyPDF2 is not None:
         try:
             with open(path, "rb") as f:
@@ -79,7 +79,6 @@ def read_pdf_text(path: str) -> List[Tuple[int, str]]:
         except Exception:
             pass
 
-    # Fallback to pdfplumber if PyPDF2 got nothing
     if not pages and pdfplumber is not None:
         try:
             with pdfplumber.open(path) as pdf:
@@ -93,29 +92,34 @@ def read_pdf_text(path: str) -> List[Tuple[int, str]]:
     return pages
 
 def normalize_whitespace(s: str) -> str:
-    return re.sub(r"\s+", " ", s).strip()
+    return re.sub(r"\s+", " ", (s or "")).strip()
 
-def split_into_clauses(text: str) -> List[str]:
-    # preserve your earlier anchors (Article numbers, ECC codes, etc.)
+def split_into_clauses_raw_norm(text: str) -> List[Tuple[str, str]]:
+    """
+    Split PDF text into clauses and return list of (raw, norm) pairs:
+      - raw: original text chunk (line breaks largely preserved)
+      - norm: whitespace-normalized version for scoring/embeddings
+    """
     t = text.replace("\r", "")
-    t = re.sub(r"\n{3,}", "\n\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)  # collapse huge gaps but keep reasonable breaks
+
     anchors = re.split(
         r"(?=^Article\s+\d+)|(?=^\d-\d-(?:\d|-){1,6}\b)|(?=^[A-Z][A-Za-z \-/()]{5,}\s+\d-\d\b)",
         t, flags=re.MULTILINE
     )
-    parts = []
+    parts: List[Tuple[str, str]] = []
     for seg in anchors:
-        seg = seg.strip()
+        seg = seg.strip("\n")
         if not seg:
             continue
         for p in re.split(r"\n{2,}", seg):
-            p = normalize_whitespace(p)
-            if len(p) > 50:
-                parts.append(p)
+            raw = p.strip("\n ")
+            norm = normalize_whitespace(raw)
+            if len(norm) > 50:
+                parts.append((raw, norm))
     return parts
 
 def guess_reference(chunk: str, source_label: str) -> str:
-    # keep clause/article inference you had
     m = re.search(r"(Article\s+\d+)(?::?\s*([^\n]+)?)?", chunk, re.IGNORECASE)
     if m:
         title = (m.group(2) or "").strip()
@@ -124,7 +128,6 @@ def guess_reference(chunk: str, source_label: str) -> str:
     m2 = re.search(r"\b\d-\d-(?:\d|-){1,6}\b", chunk)  # ECC code-like
     if m2:
         return m2.group(0)
-    # fallback: first words
     words = chunk.split()
     return " ".join(words[:8]) + ("..." if len(words) > 8 else "")
 
@@ -135,7 +138,8 @@ class Clause:
     filename: str
     page: int
     reference: str
-    text: str
+    text_raw: str   # exact as extracted from PDF (verbatim)
+    text_norm: str  # normalized for scoring/embeddings
 
 class SearchResponseItem(BaseModel):
     source: str
@@ -150,6 +154,7 @@ class SearchResponse(BaseModel):
     total_matches: int
     returned: int
     results: List[SearchResponseItem]
+    answer_markdown: str | None = None  # optional LLM answer (for hybrid)
 
 # ---------- Index caching ----------
 INDEX: List[Clause] = []
@@ -161,6 +166,9 @@ def load_index_from_disk() -> bool:
         try:
             with open(INDEX_PATH, "r", encoding="utf-8") as f:
                 items = json.load(f)
+            if not items or ("text_raw" not in items[0] or "text_norm" not in items[0]):
+                print("[index] cached index schema is old; will rebuild.")
+                return False
             INDEX = [Clause(**it) for it in items]
             print(f"[index] loaded cached index: {len(INDEX)} clauses")
             return True
@@ -184,16 +192,17 @@ def build_index() -> List[Clause]:
         page_texts = read_pdf_text(path)
         print(f"[index] {label}: {len(page_texts)} pages with text (file={os.path.basename(path)})")
         for page_no, text in page_texts:
-            if not text or len(text.strip()) < 20:  # skip empty pages
+            if not text or len(text.strip()) < 20:
                 continue
-            for chunk in split_into_clauses(text):
-                ref = guess_reference(chunk, label)
+            for raw, norm in split_into_clauses_raw_norm(text):
+                ref = guess_reference(norm, label)
                 clauses.append(Clause(
                     source=label,
                     filename=os.path.basename(path),
                     page=page_no,
                     reference=ref,
-                    text=chunk
+                    text_raw=raw,
+                    text_norm=norm
                 ))
     print(f"[index] built fresh: {len(clauses)} clauses")
     return clauses
@@ -209,13 +218,12 @@ def tokenize(s: str):
     return re.findall(r"[a-z0-9]+", s.lower())
 
 def score_clause(clause: Clause, query_tokens, phrase: str) -> float:
-    tf = Counter(tokenize(clause.text))
+    tf = Counter(tokenize(clause.text_norm))
     score = sum(tf.get(t, 0) for t in query_tokens)
-    if phrase and phrase in clause.text.lower():
+    if phrase and phrase in clause.text_norm.lower():
         score += 3.0
     ref = clause.reference.lower()
     score += sum(1.5 for t in query_tokens if t in ref)
-    # (keep your earlier optional source-boosts if you want them back)
     return float(score)
 
 # ---------- Semantic / Hybrid (fast model + caching) ----------
@@ -224,10 +232,9 @@ from sentence_transformers import SentenceTransformer
 
 EMBEDDER = None
 CLAUSE_EMB = None  # np.ndarray (N, D)
-EMBED_DIM = 384    # all-MiniLM-L6-v2
-
+EMBED_DIM = 384
 EMB_PATH   = os.path.join(BASE_DIR, "embeddings.npy")
-MODEL_NAME = "all-MiniLM-L6-v2"  # fast & good
+MODEL_NAME = "all-MiniLM-L6-v2"
 
 def get_embedder():
     global EMBEDDER
@@ -236,7 +243,7 @@ def get_embedder():
     return EMBEDDER
 
 def clause_repr(c: Clause) -> str:
-    body = c.text if len(c.text) < 1200 else c.text[:1200]  # shorter = faster
+    body = c.text_norm if len(c.text_norm) < 1200 else c.text_norm[:1200]
     return f"{c.source} | {c.reference} | p.{c.page}\n{body}"
 
 def try_load_embeddings_from_disk() -> bool:
@@ -284,13 +291,13 @@ def search_semantic(query: str, top_k: int = 20):
         return []
     enc = get_embedder()
     qv = enc.encode([query], normalize_embeddings=True)
-    sims = (CLAUSE_EMB @ qv[0])  # cosine for normalized vectors
+    sims = (CLAUSE_EMB @ qv[0])
     idx = np.argsort(-sims)[:top_k]
     return [(INDEX[i], float(sims[i])) for i in idx]
 
 def search_hybrid(query: str, top_k: int = 20, alpha: float = 0.6):
     q_tokens = tokenize(query)
-    # 1) lexical (cheap)
+    # lexical
     lex = []
     for c in INDEX:
         s = score_clause(c, q_tokens, query.lower().strip())
@@ -300,7 +307,7 @@ def search_hybrid(query: str, top_k: int = 20, alpha: float = 0.6):
         max_lex = max(s for _, s in lex) or 1.0
         lex = [(c, s / max_lex) for c, s in lex]
 
-    # 2) semantic (over-fetch but keep small for speed)
+    # semantic
     sem = search_semantic(query, top_k=max(80, top_k))
     if sem:
         min_s = min(s for _, s in sem)
@@ -308,7 +315,7 @@ def search_hybrid(query: str, top_k: int = 20, alpha: float = 0.6):
         rng = max(max_s - min_s, 1e-6)
         sem = [(c, (s - min_s) / rng) for c, s in sem]
 
-    # 3) merge
+    # merge
     scores = {}
     for c, s in sem:
         scores[id(c)] = scores.get(id(c), 0.0) + alpha * s
@@ -319,6 +326,51 @@ def search_hybrid(query: str, top_k: int = 20, alpha: float = 0.6):
     combined.sort(key=lambda x: x[1], reverse=True)
     return combined[:top_k]
 
+# ---------- Gemini generation helper (always for hybrid) ----------
+def gemini_answer_from_results(query: str, items: list[SearchResponseItem]) -> str:
+    if not GEMINI_API_KEY:
+        return "_LLM disabled: set GEMINI_API_KEY_"
+    try:
+        import google.generativeai as genai
+    except Exception as e:
+        return f"_LLM unavailable: {e}_"
+
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel(GEMINI_MODEL)
+
+    # Use up to 5 items
+    top = items[:5]
+    corpus = []
+    for i, it in enumerate(top, 1):
+        label = f"[{i}] {it.source} — {it.reference} (p.{it.page}, {it.filename})"
+        snippet = it.text.strip()
+        if len(snippet) > 1500:
+            snippet = snippet[:1500] + "…"
+        corpus.append(f"{label}\n{snippet}")
+
+    prompt = f"""
+You are a compliance assistant. Answer the user's query using ONLY the quoted clauses below.
+- Be concise and cite sources inline like [1], [2] referring to the items.
+- If something is not covered, say so briefly.
+- Do NOT fabricate; only derive from the given clauses.
+
+Query:
+{query}
+
+Clauses:
+{chr(10).join(corpus)}
+
+Return Markdown with:
+- A short answer (2–6 sentences)
+- A bullet list of cited clauses with their labels
+"""
+    try:
+        resp = model.generate_content(prompt)
+        text = (resp.text or "").strip() if hasattr(resp, "text") else str(resp).strip()
+        return text or "_No answer generated._"
+    except Exception as e:
+        return f"_Gemini error: {e}_"
+
 # ---------- FastAPI ----------
 from enum import Enum
 class Method(str, Enum):
@@ -326,12 +378,11 @@ class Method(str, Enum):
     semantic = "semantic"
     hybrid = "hybrid"
 
-# Robust CORS parsing
 raw = ALLOW_ORIGINS or ""
 origins = ["*"] if raw.strip() == "*" else [o.strip() for o in re.split(r"[,;\s]+", raw) if o.strip()]
 print(f"[startup] ALLOW_ORIGINS parsed: {origins}")
 
-app = FastAPI(title="Regulation Clause Search API", version="0.3.0")
+app = FastAPI(title="Regulation Clause Search API", version="0.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -376,7 +427,8 @@ def search(
 ):
     ensure_index()
     if not INDEX:
-        return SearchResponse(query=query, total_matches=0, returned=0, results=[])
+        return SearchResponse(query=query, total_matches=0, returned=0, results=[], answer_markdown=None)
+
     if method == Method.lexical:
         q_tokens = tokenize(query)
         scored = []
@@ -392,12 +444,37 @@ def search(
 
     total = len(scored)
     top = scored[:top_k]
-    results = [SearchResponseItem(**asdict(c), score=round(s, 3)) for c, s in top]
-    return SearchResponse(query=query, total_matches=total, returned=len(results), results=results)
+
+    def pick_text(c: Clause) -> str:
+        # Lexical & Semantic: return exact PDF text; Hybrid: normalized (results stay concise)
+        if method in (Method.lexical, Method.semantic):
+            return c.text_raw
+        return c.text_norm
+
+    results = [SearchResponseItem(
+        source=c.source,
+        filename=c.filename,
+        page=c.page,
+        reference=c.reference,
+        text=pick_text(c),
+        score=round(s, 3)
+    ) for c, s in top]
+
+    # Always generate LLM answer when hybrid is chosen
+    answer_md = None
+    if method == Method.hybrid and results:
+        answer_md = gemini_answer_from_results(query, results)
+
+    return SearchResponse(
+        query=query,
+        total_matches=total,
+        returned=len(results),
+        results=results,
+        answer_markdown=answer_md
+    )
 
 @app.post("/reindex")
 def reindex():
-    """Rebuild index and embeddings; clears caches so next request is fresh."""
     global INDEX, CLAUSE_EMB
     INDEX = build_index()
     save_index_to_disk()
@@ -410,5 +487,5 @@ def reindex():
     threading.Thread(target=build_embeddings, daemon=True).start()
     return {"status": "ok", "count": len(INDEX)}
 
-if __name__ == "__main__":  # <-- fix __name__
+if __name__ == "__main__":
     uvicorn.run("server_app:app", host=APP_HOST, port=APP_PORT, reload=True)

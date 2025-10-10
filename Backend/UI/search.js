@@ -1,5 +1,5 @@
 // ====== CONFIG ======
-const API_URL   = "http://127.0.0.1:5001"; // <-- Flask proxy for /search
+const API_URL   = "http://127.0.0.1:5001"; // Flask proxy for /search
 const LOGIN_PAGE = "login.html";
 
 // ====== DOM ======
@@ -13,6 +13,7 @@ const statText = document.getElementById("statText");
 const countPill = document.getElementById("countPill");
 const errBox = document.getElementById("err");
 const infoBox = document.getElementById("info");
+const answerBox = document.getElementById("llmAnswer");
 const resultsBox = document.getElementById("results");
 
 // ====== utils ======
@@ -27,15 +28,35 @@ function highlight(text, q){
 }
 function copy(text){ navigator.clipboard?.writeText(text).catch(()=>{}); }
 
-// alpha enable/disable
-function updateAlphaState(){
-  const on = methodSel.value === "hybrid";
-  alphaInput.disabled = !on;
-  alphaHint.textContent = on ? "active" : "disabled";
-  alphaHint.style.color = on ? "#0a5f2b" : "#a1a1a1";
+// Minimal safe-ish Markdown
+function renderMarkdown(md) {
+  if (!md) return "";
+  let html = safe(md);
+  html = html
+    .replace(/^###### (.*)$/gm, "<h6>$1</h6>")
+    .replace(/^##### (.*)$/gm, "<h5>$1</h5>")
+    .replace(/^#### (.*)$/gm, "<h4>$1</h4>")
+    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/^- (.*)$/gm, "<li>$1</li>")
+    .replace(/(\n<li>.*<\/li>)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  html = html.replace(/\n{2,}/g, "<br><br>");
+  return html;
 }
-methodSel.addEventListener("change", updateAlphaState);
-updateAlphaState();
+
+// alpha state
+function updateControls() {
+  const isHybrid = methodSel.value === "hybrid";
+  alphaInput.disabled = !isHybrid;
+  alphaHint.textContent = isHybrid ? "active" : "disabled";
+  alphaHint.style.color = isHybrid ? "#0a5f2b" : "#a1a1a1";
+}
+methodSel.addEventListener("change", updateControls);
+updateControls();
 
 // ====== search submit ======
 form.addEventListener("submit", async (e) => {
@@ -46,6 +67,8 @@ form.addEventListener("submit", async (e) => {
   setText(statText, "Searching…");
   show(countPill, false);
   resultsBox.innerHTML = "";
+  show(answerBox, false);
+  answerBox.innerHTML = "";
 
   const q = qInput.value.trim();
   const topK = Math.max(5, Math.min(100, Number(topKInput.value) || 20));
@@ -62,6 +85,15 @@ form.addEventListener("submit", async (e) => {
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+
+    // Render auto LLM answer (when available for RAG)
+    if (data.answer_markdown) {
+      answerBox.innerHTML = `
+        <h3 style="margin-top:0">RAG Response</h3>
+        <div class="markdown">${renderMarkdown(data.answer_markdown)}</div>
+      `;
+      show(answerBox, true);
+    }
 
     const items = Array.isArray(data.results) ? data.results : [];
     const total = typeof data.total_matches === "number" ? data.total_matches : items.length;
@@ -91,7 +123,7 @@ form.addEventListener("submit", async (e) => {
         <div class="text">${highlight(c.text || "", q)}</div>
         <div class="actions">
           <button class="btn" type="button">Copy citation
-          <img src="copy.png" width="16" height="16" alt="Description of the image"> 
+            <img src="copy.png" width="16" height="16" alt="copy">
           </button>
         </div>
       `;
@@ -100,7 +132,8 @@ form.addEventListener("submit", async (e) => {
     });
     resultsBox.appendChild(frag);
 
-    setText(statText, `Method: ${method}${method==="hybrid" ? ` (alpha=${alpha})` : ""}`);
+    const methodLabel = method === "hybrid" ? "RAG (Hybrid)" : method;
+    setText(statText, `Method: ${methodLabel}${method==="hybrid" ? ` (alpha=${alpha}, LLM=auto)` : ""}`);
     setText(countPill, `${Math.min(items.length, topK)} / ${total}`);
     show(countPill, true);
     show(infoBox, false);
