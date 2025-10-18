@@ -1,15 +1,12 @@
-// ================== CONFIG ==================
-const BACKEND_URL = "http://127.0.0.1:5001"; // your Flask auth (or FastAPI if same)
+const BACKEND_URL = "http://127.0.0.1:5001"; 
 const REDIRECT_AFTER_LOGIN = "index.html";
 
-// Optional: allow redirect via ?from=/case
 function getRedirectPath() {
   const u = new URL(window.location.href);
   const from = u.searchParams.get("from");
   return from || "/case";
 }
 
-// ================== HELPERS ==================
 const $ = (sel) => document.querySelector(sel);
 
 const form = $("#loginForm");
@@ -44,7 +41,6 @@ togglePassBtn.addEventListener("click", () => {
   password.focus();
 });
 
-// ================== SUBMIT ==================
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearError();
