@@ -17,7 +17,6 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key-change-me')
 
-    # CORS for the frontend origin (auth and proxy both served by Flask)
     CORS(
         app,
         resources={r"/*": {"origins": os.getenv('FRONTEND_ORIGIN', '*')}},
