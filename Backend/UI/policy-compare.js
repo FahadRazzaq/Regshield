@@ -1,4 +1,3 @@
-
 const API = window.BACKEND_URL || "http://127.0.0.1:5001";
 const $ = (s) => document.querySelector(s);
 
@@ -34,7 +33,6 @@ function renderMarkdown(md) {
     let line = lines[i];
 
     if (/^```/.test(line)) {
-      const fence = line.trim();
       let code = [];
       i++;
       while (i < lines.length && !/^```/.test(lines[i])) {
@@ -53,7 +51,6 @@ function renderMarkdown(md) {
 
     if (isTableHeader) {
       const headerRow = line;
-      const sepRow = lines[i + 1];
       const rows = [];
       i += 2;
       while (i < lines.length && /\|/.test(lines[i]) && !/^\s*$/.test(lines[i])) {
@@ -72,7 +69,6 @@ function renderMarkdown(md) {
 
       let tbl = `<table><thead><tr>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>`;
       for (const r of body) {
-        // pad to header length
         const cells = r.length < heads.length ? r.concat(Array(heads.length - r.length).fill("")) : r;
         tbl += `<tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`;
       }
@@ -138,10 +134,16 @@ function renderMarkdown(md) {
 const form = $("#uploadForm");
 const fileEl = $("#file");
 const method = $("#method");
+const sourcesSel = $("#sources");
 const topk = $("#topk");
 const statusBox = $("#status");
 const errBox = $("#error");
 const results = $("#results");
+const exportBtn = $("#exportBtn");
+
+// keep for export
+let LAST_COMPARE = null;   // entire backend response
+let LAST_COMPARE_META = null;
 
 function setStatus(msg) {
   statusBox.textContent = msg || "";
@@ -161,7 +163,7 @@ function keepFirstTable(md) {
     if (header && sep) break;
     i++;
   }
-  if (i >= lines.length) return md; 
+  if (i >= lines.length) return md;
 
   const out = [lines[i], lines[i + 1]];
   i += 2;
@@ -172,8 +174,8 @@ function keepFirstTable(md) {
   return out.join("\n");
 }
 
-
 function renderResults(payload) {
+  LAST_COMPARE = payload; // keep
   const items = Array.isArray(payload.items) ? payload.items : [];
   results.innerHTML = "";
 
@@ -249,7 +251,9 @@ form.addEventListener("submit", async (e) => {
   const fd = new FormData();
   fd.append("file", f, f.name);
   fd.append("method", method.value);
-  fd.append("top_k", String(Math.max(1, Math.min(8, Number(topk.value) || 3))));
+  fd.append("sources", sourcesSel?.value || "all");
+  const topKValue = Math.max(1, Math.min(8, Number(topk.value) || 3));
+  fd.append("top_k", String(topKValue));
 
   try {
     const res = await fetch(`${API}/compare/policy`, {
@@ -266,6 +270,14 @@ form.addEventListener("submit", async (e) => {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.msg || data.error || `HTTP ${res.status}`);
+
+    LAST_COMPARE_META = {
+      method: method.value,
+      sources: sourcesSel?.value || "all",
+      topK: topKValue,
+      when: new Date().toLocaleString(),
+      filename: data.filename || f.name
+    };
 
     renderResults(data);
     setStatus(`Compared ${data.sections_compared} section(s) using ${data.method} (top_k=${data.top_k}).`);
@@ -284,3 +296,93 @@ fileEl.addEventListener("change", () => {
     setError("Unsupported file type. Allowed: .pdf, .docx, .txt");
   }
 });
+
+// -------- Export to PDF (Print) ----------
+function buildPrintableHTML() {
+  if (!LAST_COMPARE) return null;
+  const meta = LAST_COMPARE_META || {};
+  const items = LAST_COMPARE.items || [];
+
+  const style = `
+  <style>
+    @page { size: A4; margin: 16mm; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; }
+    h1,h2,h3,h4 { margin: 0 0 .5rem; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 16px; margin-top: 1.2rem; }
+    .meta { font-size: 12px; color:#555; margin-bottom: 12px; }
+    .card { border:1px solid #e5e5e5; border-radius:8px; padding:10px; margin-bottom:12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .badge { display:inline-block; border:1px solid #ccc; border-radius:999px; padding:2px 8px; margin-right:6px; font-size:11px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; }
+    th { background: #f6f8fa; }
+    .small { font-size: 11px; color:#666; }
+  </style>`;
+
+  const header = `
+    <h1>Policy vs Regulation — Export</h1>
+    <div class="meta">
+      <div><strong>File:</strong> ${esc(meta.filename || "-")}</div>
+      <div><strong>Method:</strong> ${esc(meta.method || "-")}</div>
+      <div><strong>Sources:</strong> ${esc(String(meta.sources || "all").toUpperCase())}</div>
+      <div><strong>Top K:</strong> ${esc(String(meta.topK || "-"))}</div>
+      <div class="small">Exported: ${esc(meta.when || new Date().toLocaleString())}</div>
+    </div>
+  `;
+
+  const secHtml = items.map((it) => {
+    const matches = (it.matches || []).map((m) => {
+      const refBits = [
+        esc(m.source || "-"),
+        esc(m.reference || "-"),
+        `p.${esc(String(m.page ?? ""))}`,
+        esc(m.filename || "")
+      ].join(" • ");
+      const snippet = esc(String(m.text || ""));
+      return `
+        <div style="margin-bottom:6px;">
+          <div class="badge">${refBits}</div>
+          <div class="small">${snippet}</div>
+        </div>
+      `;
+    }).join("");
+
+    const md = it.ai_comparison_markdown || "";
+    const mdHtml = renderMarkdown(md);
+
+    return `
+      <div class="card">
+        <h3>${esc(it.title || `Section ${it.section_id}`)}</h3>
+        <div class="grid">
+          <div>
+            <h4>Policy Section</h4>
+            <div class="small">${esc(it.policy_excerpt || "")}</div>
+          </div>
+          <div>
+            <h4>Relevant Clauses</h4>
+            ${matches || "<em>No matches</em>"}
+          </div>
+        </div>
+        <h4 style="margin-top:10px;">AI Comparison</h4>
+        <div>${mdHtml}</div>
+      </div>
+    `;
+  }).join("");
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Policy Compare Export</title>${style}</head>
+  <body>${header}${secHtml}</body></html>`;
+}
+
+function exportPDF() {
+  if (!LAST_COMPARE) { alert("Run a comparison first."); return; }
+  const html = buildPrintableHTML();
+  const w = window.open("", "_blank");
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+}
+
+exportBtn?.addEventListener("click", exportPDF);

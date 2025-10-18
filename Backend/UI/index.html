@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <script>
-  const BACKEND_URL = "http://127.0.0.1:5001"; 
+  const BACKEND_URL = "http://127.0.0.1:5001";
   function getToken() {
     return localStorage.getItem("token") || sessionStorage.getItem("token");
   }
@@ -46,7 +46,7 @@
         </div>
       </div>
       <nav class="top-links">
-        <a href="policy-compare.html"  class="semi-bold-link">Policy Compare</a>
+        <a href="policy-compare.html" class="semi-bold-link">Policy Compare</a>
         <button id="logoutBtn" class="logout-btn" type="button" title="Log out">Log out</button>
       </nav>
     </div>
@@ -75,6 +75,16 @@
         </select>
       </div>
 
+      <!-- Document selector -->
+      <div class="field">
+        <label for="corpus">Document</label>
+        <select id="corpus" class="input">
+          <option value="all" selected>All</option>
+          <option value="pdpl">PDPL</option>
+          <option value="ecc">ECC</option>
+        </select>
+      </div>
+
       <div class="field row-end">
         <button id="searchBtn" class="btn btn--primary" type="submit">Search</button>
       </div>
@@ -86,6 +96,11 @@
           <input id="alpha" class="input" type="number" step="0.05" min="0" max="1" value="0.6" />
           <span class="muted" id="alphaHint">active</span>
         </div>
+      </div>
+
+      <!-- NEW: Export -->
+      <div class="field" style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:.5rem;">
+        <button id="exportBtn" class="btn" type="button" title="Export as PDF">Export PDF</button>
       </div>
     </form>
 

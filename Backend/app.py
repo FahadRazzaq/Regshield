@@ -1,8 +1,7 @@
-# app.py
 from config import create_app, db, jwt
 from auth_routes import auth_bp
-import models  
-from typing import List, Dict, Any  
+import models
+from typing import List, Dict, Any
 
 import os, requests
 from flask import jsonify, request, Response, send_from_directory
@@ -29,7 +28,7 @@ SEARCH_URL = os.getenv("SEARCH_URL", "http://127.0.0.1:8000")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL   = os.getenv("GEMINI_MODEL")
 MAX_MATCHES_PER_SECTION = int(os.getenv("MAX_MATCHES_PER_SECTION", "3"))
-MAX_SECTIONS            = int(os.getenv("MAX_SECTIONS", "25"))  
+MAX_SECTIONS            = int(os.getenv("MAX_SECTIONS", "25"))
 
 app = create_app()
 app.register_blueprint(auth_bp)
@@ -178,8 +177,7 @@ def call_gemini_compare(policy_excerpt: str, matches: list[dict]) -> str:
 
     prompt = f"""
 You are a compliance analyst.  Compare the POLICY EXCERPT with the matched REGULATORY CLAUSES.
-Return concise Markdown with a two-column table: (Return **only one** Markdown table and **nothing else** (no headings, no paragraphs, no lists before or after).
-The table must start **exactly** with:)
+Return concise Markdown with a single table only (no extra text before/after).
 
 Columns:
 - **Policy** (quote the key sentence(s))
@@ -191,6 +189,7 @@ Only include the most relevant {len(matches)} clauses below.
 
 POLICY EXCERPT:
 \"\"\"{policy_excerpt[:4000]}\"\"\"
+
 
 REGULATORY CLAUSES:
 {chr(10).join(reg_rows)}
@@ -218,7 +217,7 @@ def proxy_search():
         return Response(r.content, status=r.status_code, content_type=r.headers.get("content-type", "application/json"))
     except requests.RequestException as e:
         app.logger.error("Upstream search failed (to %s): %s", upstream, e)
-        return Response(f'{{"error":"upstream_unreachable","detail":"{str(e)}"}}', 502, content_type="application/json")
+        return Response(f'{"{"}"error":"upstream_unreachable","detail":"%s"' % str(e), 502, content_type="application/json")
 
 @app.get("/health")
 def proxy_root_health():
@@ -226,7 +225,7 @@ def proxy_root_health():
         r = requests.get(f"{SEARCH_URL}/health", timeout=10)
         return Response(r.content, status=r.status_code, content_type=r.headers.get("content-type", "application/json"))
     except requests.RequestException as e:
-        return Response(f'{{"status":"down","detail":"{str(e)}"}}', 502, content_type="application/json")
+        return Response(f'{"{"}"status":"down","detail":"%s"' % str(e), 502, content_type="application/json")
 
 from flask_jwt_extended import jwt_required, get_jwt_identity
 @app.get('/protected/ping')
@@ -244,6 +243,7 @@ def compare_policy():
       - file: the uploaded policy (pdf, docx, txt)
       - method (optional): lexical|semantic|hybrid (default hybrid)
       - top_k (optional): int per section (default MAX_MATCHES_PER_SECTION)
+      - sources (optional): all|pdpl|ecc|comma-separated|full labels  <-- NEW
     """
     if "file" not in request.files:
         return jsonify({"error": "no_file", "msg": "Please upload a policy file."}), 400
@@ -265,6 +265,7 @@ def compare_policy():
     sections = sections[:MAX_SECTIONS]
 
     method = request.form.get("method", "hybrid")
+    sources = request.form.get("sources", "all")  # NEW
     try:
         top_k = int(request.form.get("top_k", str(MAX_MATCHES_PER_SECTION)))
         top_k = max(1, min(8, top_k))
@@ -273,11 +274,11 @@ def compare_policy():
 
     compared = []
     for sec in sections:
-        q = sec["text"][:500] 
+        q = sec["text"][:500]
         try:
             r = requests.get(
                 f"{SEARCH_URL}/search",
-                params={"query": q, "top_k": top_k, "method": method, "alpha": 0.6},
+                params={"query": q, "top_k": top_k, "method": method, "alpha": 0.6, "sources": sources},  # NEW
                 timeout=40,
                 headers={"Accept": "application/json"},
             )

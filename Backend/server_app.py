@@ -1,4 +1,3 @@
-# server_app.py
 import os, re, json, threading
 from dataclasses import dataclass, asdict
 from typing import List, Tuple
@@ -54,6 +53,31 @@ PDFS = [
     (ECC_PATH,  "NCA Essential Cybersecurity Controls (ECC-1:2018)"),
 ]
 
+# --- source helpers for filtering
+SOURCE_LABELS = {
+    "pdpl": "PDPL (Implementing Regulation)",
+    "ecc": "NCA Essential Cybersecurity Controls (ECC-1:2018)",
+}
+def parse_sources_param(s: str):
+    if not s or s.lower().strip() in ("", "all", "*"):
+        return None
+    wanted = set()
+    for part in re.split(r"[,;\s]+", s.strip()):
+        if not part:
+            continue
+        key = part.lower()
+        if key in SOURCE_LABELS:
+            wanted.add(SOURCE_LABELS[key])
+        else:
+            wanted.add(part)  # allow full labels
+    return wanted
+
+def source_allowed(clause_source: str, allowed_set):
+    if allowed_set is None:
+        return True
+    return clause_source in allowed_set
+
+# ---------- Read PDF ----------
 def read_pdf_text(path: str) -> List[Tuple[int, str]]:
     """Return list[(page_no, text)] with non-empty text (raw page text with line breaks)."""
     pages: List[Tuple[int, str]] = []
@@ -132,8 +156,8 @@ class Clause:
     filename: str
     page: int
     reference: str
-    text_raw: str   
-    text_norm: str  
+    text_raw: str
+    text_norm: str
 
 class SearchResponseItem(BaseModel):
     source: str
@@ -148,7 +172,7 @@ class SearchResponse(BaseModel):
     total_matches: int
     returned: int
     results: List[SearchResponseItem]
-    answer_markdown: str | None = None  
+    answer_markdown: str | None = None
 
 INDEX: List[Clause] = []
 INDEX_PATH = os.path.join(BASE_DIR, "index.json")
@@ -222,7 +246,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 EMBEDDER = None
-CLAUSE_EMB = None 
+CLAUSE_EMB = None
 EMBED_DIM = 384
 EMB_PATH   = os.path.join(BASE_DIR, "embeddings.npy")
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -271,51 +295,23 @@ def ensure_embeddings():
     if CLAUSE_EMB is None or (len(INDEX) and CLAUSE_EMB.shape[0] != len(INDEX)):
         build_embeddings()
 
-def search_semantic(query: str, top_k: int = 20):
+def search_semantic_subset(query: str, candidates: List[Clause], top_k: int):
+    """Semantic scoring restricted to candidate subset; normalize to [0,1]."""
     ensure_index()
     try:
         ensure_embeddings()
     except Exception as e:
         print(f"[emb] ensure_embeddings failed: {e}")
         return []
-    if CLAUSE_EMB is None or CLAUSE_EMB.size == 0:
+    if CLAUSE_EMB is None or CLAUSE_EMB.size == 0 or not candidates:
         return []
     enc = get_embedder()
-    qv = enc.encode([query], normalize_embeddings=True)
-    sims = (CLAUSE_EMB @ qv[0])
-    idx = np.argsort(-sims)[:top_k]
-    return [(INDEX[i], float(sims[i])) for i in idx]
-
-def search_hybrid(query: str, top_k: int = 20, alpha: float = 0.6):
-    q_tokens = tokenize(query)
-    # lexical
-    lex = []
-    for c in INDEX:
-        s = score_clause(c, q_tokens, query.lower().strip())
-        if s > 0:
-            lex.append((c, s))
-    if lex:
-        max_lex = max(s for _, s in lex) or 1.0
-        lex = [(c, s / max_lex) for c, s in lex]
-
-    # semantic
-    sem = search_semantic(query, top_k=max(80, top_k))
-    if sem:
-        min_s = min(s for _, s in sem)
-        max_s = max(s for _, s in sem) or 1.0
-        rng = max(max_s - min_s, 1e-6)
-        sem = [(c, (s - min_s) / rng) for c, s in sem]
-
-    # merge
-    scores = {}
-    for c, s in sem:
-        scores[id(c)] = scores.get(id(c), 0.0) + alpha * s
-    for c, s in lex:
-        scores[id(c)] = scores.get(id(c), 0.0) + (1.0 - alpha) * s
-
-    combined = [(c, scores[id(c)]) for c in INDEX if id(c) in scores]
-    combined.sort(key=lambda x: x[1], reverse=True)
-    return combined[:top_k]
+    qv = enc.encode([query], normalize_embeddings=True)[0]
+    idx_map = [INDEX.index(c) for c in candidates]
+    sims = [(c, float(CLAUSE_EMB[i] @ qv)) for c, i in zip(candidates, idx_map)]
+    sims.sort(key=lambda x: x[1], reverse=True)
+    sims = sims[:top_k]
+    return [(c, (s + 1.0) / 2.0) for c, s in sims]  # map to [0,1]
 
 def gemini_answer_from_results(query: str, items: list[SearchResponseItem]) -> str:
     if not GEMINI_API_KEY:
@@ -370,7 +366,7 @@ raw = ALLOW_ORIGINS or ""
 origins = ["*"] if raw.strip() == "*" else [o.strip() for o in re.split(r"[,;\s]+", raw) if o.strip()]
 print(f"[startup] ALLOW_ORIGINS parsed: {origins}")
 
-app = FastAPI(title="Regulation Clause Search API", version="0.5.0")
+app = FastAPI(title="Regulation Clause Search API", version="0.6.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -412,32 +408,65 @@ def search(
     top_k: int = Query(20, ge=1, le=100),
     method: Method = Method.lexical,
     alpha: float = Query(0.6, ge=0.0, le=1.0),
+    sources: str = Query("all", description="Which documents to search: all | pdpl | ecc | comma-separated | full labels"),
 ):
     ensure_index()
     if not INDEX:
         return SearchResponse(query=query, total_matches=0, returned=0, results=[], answer_markdown=None)
 
+    allowed = parse_sources_param(sources)
+    candidates = [c for c in INDEX if source_allowed(c.source, allowed)]
+    if not candidates:
+        return SearchResponse(query=query, total_matches=0, returned=0, results=[], answer_markdown=None)
+
     if method == Method.lexical:
         q_tokens = tokenize(query)
         scored = []
-        for c in INDEX:
+        for c in candidates:
             s = score_clause(c, q_tokens, query.lower().strip())
             if s > 0:
                 scored.append((c, s))
         if scored:
             max_s = max(s for _, s in scored) or 1.0
-            scored = [(c, s / max_s) for c, s in scored]
+            scored = [(c, s / max_s) for c, s in scored]  # normalize 0..1
         scored.sort(key=lambda x: x[1], reverse=True)
 
     elif method == Method.semantic:
-        scored = search_semantic(query, top_k=top_k)
+        scored = search_semantic_subset(query, candidates, top_k=top_k)
+
     else:
-        scored = search_hybrid(query, top_k=top_k, alpha=alpha)
+        # Hybrid merge on candidates
+        q_tokens = tokenize(query)
+
+        # 1) lexical normalized
+        lex = []
+        for c in candidates:
+            s = score_clause(c, q_tokens, query.lower().strip())
+            if s > 0:
+                lex.append((c, s))
+        if lex:
+            max_lex = max(s for _, s in lex) or 1.0
+            lex = [(c, (s / max_lex)) for c, s in lex]
+
+        # 2) semantic normalized to 0..1 over candidates
+        sem = search_semantic_subset(query, candidates, top_k=max(80, top_k))
+
+        # 3) merge
+        combined = {}
+        for c, s in sem or []:
+            combined[id(c)] = combined.get(id(c), 0.0) + alpha * s
+        for c, s in lex or []:
+            combined[id(c)] = combined.get(id(c), 0.0) + (1.0 - alpha) * s
+
+        scored = [(c, combined[id(c)]) for c in candidates if id(c) in combined]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        scored = scored[:top_k]
 
     total = len(scored)
     top = scored[:top_k]
 
     def pick_text(c: Clause) -> str:
+        # Lexical & Semantic: verbatim PDF; Hybrid: normalized (for LLM context)
         if method in (Method.lexical, Method.semantic):
             return c.text_raw
         return c.text_norm
