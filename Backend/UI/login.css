@@ -1,6 +1,4 @@
-/* ui/login.css — clean, no-scroll login layout */
 
-/* ---------- tokens ---------- */
 :root{
   --bg:#f6f7fb;
   --card:#ffffff;
@@ -15,41 +13,38 @@
   --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
-/* ---------- base reset ---------- */
 *{ box-sizing:border-box; }
 html, body{ height:100%; margin:0; }
 html{ overflow-x:hidden; scrollbar-gutter: stable both-edges; }
 body{
-  min-height:100dvh; /* handle mobile chrome UI */
+  min-height:100dvh; 
   display:grid; place-items:center;
   background: var(--bg);
   color: var(--ink);
   font: 16px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  overflow: hidden;      /* no scroll by default */
+  overflow: hidden;      
 }
 a{ color: var(--brand); text-decoration:none; }
 a:hover{ text-decoration:underline; }
 :focus-visible{ outline:2px solid var(--ring); outline-offset:2px; border-radius:8px; }
 
-/* ---------- container & card ---------- */
 .login-container{
   inline-size: 100%;
   display:flex; align-items:center; justify-content:center;
-  padding: 0; /* keep tight to avoid scroll */
+  padding: 0; 
 }
 
 .login-box{
-  width: min(420px, calc(100% - 32px)); /* 16px side gutters */
+  width: min(420px, calc(100% - 32px));
   background: var(--card);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   padding: 22px;
-  overflow: hidden; /* guard against internal overflow */
+  overflow: hidden; 
 }
 
-/* ---------- brand ---------- */
 .brand{
   display:flex; align-items:center; justify-content:center; gap:12px;
   margin-bottom: 12px;
@@ -62,7 +57,6 @@ a:hover{ text-decoration:underline; }
 .brand-title{ margin:0; font-size:20px; line-height:1.2; }
 .brand-subtitle{ margin:2px 0 0; color:var(--muted); font-size:14px; }
 
-/* ---------- form ---------- */
 .login-form{ display:grid; gap:12px; }
 
 .input-group label{
@@ -78,9 +72,8 @@ a:hover{ text-decoration:underline; }
 }
 
 .password-wrap{ position:relative; }
-.password-wrap input{ padding-right: 86px; } /* space for the button */
+.password-wrap input{ padding-right: 86px; } 
 
-/* Make the toggle button overlay inside the input so it never widens the layout */
 .toggle-pass{
   position:absolute; inset-inline-end:6px; inset-block-start:50%;
   transform: translateY(-50%);
@@ -96,7 +89,7 @@ a:hover{ text-decoration:underline; }
 
 .form-meta{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
-  flex-wrap:wrap; /* wrap on narrow screens instead of overflowing */
+  flex-wrap:wrap; 
 }
 .remember{ display:flex; align-items:center; gap:8px; white-space:nowrap; }
 .forgot{ margin-left:auto; white-space:nowrap;color:#2a567c }
@@ -106,7 +99,7 @@ a:hover{ text-decoration:underline; }
   color:var(--err);
   font-size:14px;
   margin: 4px 0;
-  overflow-wrap: anywhere; /* avoid long messages creating horizontal scroll */
+  overflow-wrap: anywhere; 
 }
 
 .login-button{
@@ -119,11 +112,9 @@ a:hover{ text-decoration:underline; }
   cursor:pointer;
 }
 
-/* footer link */
 .signup-link{ text-align:center; color:var(--muted); margin-top:8px; }
 .signup-link a{ font-weight:600;color: #2a567c }
 
-/* ---------- tiny viewports: allow vertical scroll if truly needed ---------- */
 @media (max-height: 560px){
-  body{ overflow-y:auto; } /* enable vertical scrolling only when the viewport is very short */
+  body{ overflow-y:auto; } 
 }

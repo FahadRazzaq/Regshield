@@ -1,8 +1,6 @@
-// ====== CONFIG ======
-const API_URL   = "http://127.0.0.1:5001"; // Flask proxy for /search
+const API_URL   = "http://127.0.0.1:5001"; 
 const LOGIN_PAGE = "login.html";
 
-// ====== DOM ======
 const form = document.getElementById("searchForm");
 const qInput = document.getElementById("q");
 const topKInput = document.getElementById("topK");
@@ -16,7 +14,6 @@ const infoBox = document.getElementById("info");
 const answerBox = document.getElementById("llmAnswer");
 const resultsBox = document.getElementById("results");
 
-// ====== utils ======
 function show(el, on = true){ el.style.display = on ? "" : "none"; }
 function setText(el, t){ el.textContent = t; }
 function safe(s){ return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
@@ -28,7 +25,6 @@ function highlight(text, q){
 }
 function copy(text){ navigator.clipboard?.writeText(text).catch(()=>{}); }
 
-// Minimal safe-ish Markdown
 function renderMarkdown(md) {
   if (!md) return "";
   let html = safe(md);
@@ -48,7 +44,6 @@ function renderMarkdown(md) {
   return html;
 }
 
-// alpha state
 function updateControls() {
   const isHybrid = methodSel.value === "hybrid";
   alphaInput.disabled = !isHybrid;
@@ -58,7 +53,6 @@ function updateControls() {
 methodSel.addEventListener("change", updateControls);
 updateControls();
 
-// ====== search submit ======
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   show(errBox, false);
@@ -81,12 +75,11 @@ form.addEventListener("submit", async (e) => {
     url.searchParams.set("top_k", String(topK));
     url.searchParams.set("method", method);
     if (method === "hybrid") url.searchParams.set("alpha", String(alpha));
-
+    
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    // Render auto LLM answer (when available for RAG)
     if (data.answer_markdown) {
       answerBox.innerHTML = `
         <h3 style="margin-top:0">RAG Response</h3>
@@ -146,7 +139,6 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// auto-run once
 window.addEventListener("DOMContentLoaded", () => {
   form.dispatchEvent(new Event("submit"));
 });

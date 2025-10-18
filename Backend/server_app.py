@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-# ---------- PDF parsing ----------
 try:
     import PyPDF2
 except Exception:
@@ -19,7 +18,6 @@ try:
 except Exception:
     pdfplumber = None
 
-# ---------- .env (force load + override) ----------
 from dotenv import load_dotenv, find_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = find_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -48,17 +46,14 @@ APP_HOST  = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT  = int(os.getenv("APP_PORT", "8000"))
 ALLOW_ORIGINS = os.getenv("ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
-# === Gemini config (optional) ===
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
-# ---------- Files to index ----------
 PDFS = [
     (PDPL_PATH, "PDPL (Implementing Regulation)"),
     (ECC_PATH,  "NCA Essential Cybersecurity Controls (ECC-1:2018)"),
 ]
 
-# ---------- Read PDF ----------
 def read_pdf_text(path: str) -> List[Tuple[int, str]]:
     """Return list[(page_no, text)] with non-empty text (raw page text with line breaks)."""
     pages: List[Tuple[int, str]] = []
@@ -101,7 +96,7 @@ def split_into_clauses_raw_norm(text: str) -> List[Tuple[str, str]]:
       - norm: whitespace-normalized version for scoring/embeddings
     """
     t = text.replace("\r", "")
-    t = re.sub(r"\n{3,}", "\n\n", t)  # collapse huge gaps but keep reasonable breaks
+    t = re.sub(r"\n{3,}", "\n\n", t)
 
     anchors = re.split(
         r"(?=^Article\s+\d+)|(?=^\d-\d-(?:\d|-){1,6}\b)|(?=^[A-Z][A-Za-z \-/()]{5,}\s+\d-\d\b)",
@@ -125,21 +120,20 @@ def guess_reference(chunk: str, source_label: str) -> str:
         title = (m.group(2) or "").strip()
         ref = m.group(1).title()
         return f"{ref}" + (f": {title}" if title else "")
-    m2 = re.search(r"\b\d-\d-(?:\d|-){1,6}\b", chunk)  # ECC code-like
+    m2 = re.search(r"\b\d-\d-(?:\d|-){1,6}\b", chunk)
     if m2:
         return m2.group(0)
     words = chunk.split()
     return " ".join(words[:8]) + ("..." if len(words) > 8 else "")
 
-# ---------- Data types ----------
 @dataclass
 class Clause:
     source: str
     filename: str
     page: int
     reference: str
-    text_raw: str   # exact as extracted from PDF (verbatim)
-    text_norm: str  # normalized for scoring/embeddings
+    text_raw: str   
+    text_norm: str  
 
 class SearchResponseItem(BaseModel):
     source: str
@@ -154,9 +148,8 @@ class SearchResponse(BaseModel):
     total_matches: int
     returned: int
     results: List[SearchResponseItem]
-    answer_markdown: str | None = None  # optional LLM answer (for hybrid)
+    answer_markdown: str | None = None  
 
-# ---------- Index caching ----------
 INDEX: List[Clause] = []
 INDEX_PATH = os.path.join(BASE_DIR, "index.json")
 
@@ -213,7 +206,6 @@ def ensure_index():
         INDEX = build_index()
         save_index_to_disk()
 
-# ---------- Lexical scoring ----------
 def tokenize(s: str):
     return re.findall(r"[a-z0-9]+", s.lower())
 
@@ -226,12 +218,11 @@ def score_clause(clause: Clause, query_tokens, phrase: str) -> float:
     score += sum(1.5 for t in query_tokens if t in ref)
     return float(score)
 
-# ---------- Semantic / Hybrid (fast model + caching) ----------
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 EMBEDDER = None
-CLAUSE_EMB = None  # np.ndarray (N, D)
+CLAUSE_EMB = None 
 EMBED_DIM = 384
 EMB_PATH   = os.path.join(BASE_DIR, "embeddings.npy")
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -326,7 +317,6 @@ def search_hybrid(query: str, top_k: int = 20, alpha: float = 0.6):
     combined.sort(key=lambda x: x[1], reverse=True)
     return combined[:top_k]
 
-# ---------- Gemini generation helper (always for hybrid) ----------
 def gemini_answer_from_results(query: str, items: list[SearchResponseItem]) -> str:
     if not GEMINI_API_KEY:
         return "_LLM disabled: set GEMINI_API_KEY_"
@@ -338,7 +328,6 @@ def gemini_answer_from_results(query: str, items: list[SearchResponseItem]) -> s
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel(GEMINI_MODEL)
 
-    # Use up to 5 items
     top = items[:5]
     corpus = []
     for i, it in enumerate(top, 1):
@@ -371,7 +360,6 @@ Return Markdown with:
     except Exception as e:
         return f"_Gemini error: {e}_"
 
-# ---------- FastAPI ----------
 from enum import Enum
 class Method(str, Enum):
     lexical = "lexical"
@@ -436,7 +424,11 @@ def search(
             s = score_clause(c, q_tokens, query.lower().strip())
             if s > 0:
                 scored.append((c, s))
+        if scored:
+            max_s = max(s for _, s in scored) or 1.0
+            scored = [(c, s / max_s) for c, s in scored]
         scored.sort(key=lambda x: x[1], reverse=True)
+
     elif method == Method.semantic:
         scored = search_semantic(query, top_k=top_k)
     else:
@@ -446,7 +438,6 @@ def search(
     top = scored[:top_k]
 
     def pick_text(c: Clause) -> str:
-        # Lexical & Semantic: return exact PDF text; Hybrid: normalized (results stay concise)
         if method in (Method.lexical, Method.semantic):
             return c.text_raw
         return c.text_norm
@@ -460,7 +451,6 @@ def search(
         score=round(s, 3)
     ) for c, s in top]
 
-    # Always generate LLM answer when hybrid is chosen
     answer_md = None
     if method == Method.hybrid and results:
         answer_md = gemini_answer_from_results(query, results)

@@ -1,5 +1,3 @@
-// ui/policy-compare.js
-// Works with policy-compare.html / policy-compare.css and Flask route /compare/policy
 
 const API = window.BACKEND_URL || "http://127.0.0.1:5001";
 const $ = (s) => document.querySelector(s);
@@ -19,7 +17,6 @@ function esc(s) {
     .replace(/'/g, "&#39;");
 }
 
-// ---------- Minimal Markdown renderer (safe, supports tables, lists, headings, quotes, bold/italic/code) ----------
 function renderMarkdown(md) {
   if (!md) return "";
   const lines = String(md).replace(/\r/g, "").split("\n");
@@ -36,7 +33,6 @@ function renderMarkdown(md) {
   while (i < lines.length) {
     let line = lines[i];
 
-    // Code block ```
     if (/^```/.test(line)) {
       const fence = line.trim();
       let code = [];
@@ -45,13 +41,11 @@ function renderMarkdown(md) {
         code.push(lines[i]);
         i++;
       }
-      // skip closing ```
       if (i < lines.length) i++;
       out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
       continue;
     }
 
-    // Table: header |---|---| followed by rows with pipes
     const isTableHeader =
       /\|/.test(line) &&
       i + 1 < lines.length &&
@@ -87,7 +81,6 @@ function renderMarkdown(md) {
       continue;
     }
 
-    // Blockquote
     if (/^\s*>\s?/.test(line)) {
       const block = [];
       while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
@@ -98,7 +91,6 @@ function renderMarkdown(md) {
       continue;
     }
 
-    // Headings
     if (/^#{1,6}\s+/.test(line)) {
       const level = (line.match(/^#+/) || ["#"])[0].length;
       const text = line.replace(/^#{1,6}\s+/, "");
@@ -107,7 +99,6 @@ function renderMarkdown(md) {
       continue;
     }
 
-    // Unordered list
     if (/^\s*[-*+]\s+/.test(line)) {
       const items = [];
       while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
@@ -118,7 +109,6 @@ function renderMarkdown(md) {
       continue;
     }
 
-    // Ordered list
     if (/^\s*\d+\.\s+/.test(line)) {
       const items = [];
       while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
@@ -129,7 +119,6 @@ function renderMarkdown(md) {
       continue;
     }
 
-    // Paragraph / blank
     if (!/^\s*$/.test(line)) {
       const para = [line];
       i++;
@@ -141,13 +130,11 @@ function renderMarkdown(md) {
       continue;
     }
 
-    // blank
     i++;
   }
   return out.join("\n");
 }
 
-// ---------- DOM ----------
 const form = $("#uploadForm");
 const fileEl = $("#file");
 const method = $("#method");
@@ -163,12 +150,10 @@ function setError(msg) {
   errBox.textContent = msg || "";
   show(errBox, !!msg);
 }
-// Keep only the first Markdown table; if none, return original
 function keepFirstTable(md) {
   if (!md) return "";
   const lines = String(md).replace(/\r/g, "").split("\n");
   let i = 0;
-  // find header + separator
   while (i < lines.length) {
     const header = /^\s*\|.*\|\s*$/.test(lines[i]);
     const sep = i + 1 < lines.length &&
@@ -176,7 +161,7 @@ function keepFirstTable(md) {
     if (header && sep) break;
     i++;
   }
-  if (i >= lines.length) return md; // no table found
+  if (i >= lines.length) return md; 
 
   const out = [lines[i], lines[i + 1]];
   i += 2;
@@ -188,7 +173,6 @@ function keepFirstTable(md) {
 }
 
 
-// ---------- Render ----------
 function renderResults(payload) {
   const items = Array.isArray(payload.items) ? payload.items : [];
   results.innerHTML = "";
@@ -207,7 +191,6 @@ function renderResults(payload) {
     const title = it.title ? esc(it.title) : `Section ${it.section_id}`;
     const policy = esc(it.policy_excerpt || "");
 
-    // Build matches
     const matches = (it.matches || []).map((m) => {
       const refBits = [
         m.source ? esc(m.source) : "-",
@@ -223,7 +206,6 @@ function renderResults(payload) {
       `;
     }).join("");
 
-    // AI comparison (Markdown → HTML)
     const mdOnlyTable = keepFirstTable(it.ai_comparison_markdown || "");
     const mdHtml = renderMarkdown(mdOnlyTable || "_No AI comparison was generated._");
 
@@ -251,7 +233,6 @@ function renderResults(payload) {
   results.appendChild(frag);
 }
 
-// ---------- Submit ----------
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   setError("");
@@ -277,9 +258,7 @@ form.addEventListener("submit", async (e) => {
       body: fd,
     });
 
-    // Handle auth failure gracefully
     if (res.status === 401) {
-      // send user to login with redirect back
       const loc = new URL(window.location.href);
       window.location.assign(`login.html?from=${encodeURIComponent(loc.pathname.replace(/^\//, ""))}`);
       return;
@@ -293,12 +272,10 @@ form.addEventListener("submit", async (e) => {
   } catch (err) {
     setError(err.message || "Comparison failed.");
   } finally {
-    // clear status after a moment if no error
     if (!errBox.textContent) setTimeout(() => setStatus(""), 600);
   }
 });
 
-// Optional: warn if user selects an unsupported file
 fileEl.addEventListener("change", () => {
   setError("");
   const f = fileEl.files?.[0];

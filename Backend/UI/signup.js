@@ -1,8 +1,6 @@
-// ================== CONFIG ==================
 const BACKEND_URL = "http://127.0.0.1:5001";
 const REDIRECT_AFTER_LOGIN = "index.html";
 
-// carry forward ?from= if present
 (function keepFromParamOnLoginLink(){
   const a = document.getElementById("loginLink");
   if (!a) return;
@@ -17,7 +15,6 @@ function getRedirectPath() {
   return from || REDIRECT_AFTER_LOGIN;
 }
 
-// ================== HELPERS ==================
 const $ = (sel) => document.querySelector(sel);
 
 const form = $("#signupForm");
@@ -47,7 +44,6 @@ function clearError() {
   errBox.setAttribute("data-show", "false");
 }
 
-// Toggles
 togglePassBtn.addEventListener("click", () => {
   const isHidden = password.type === "password";
   password.type = isHidden ? "text" : "password";
@@ -63,7 +59,6 @@ togglePassBtn2.addEventListener("click", () => {
   confirmPw.focus();
 });
 
-// ================== SUBMIT ==================
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearError();
@@ -88,7 +83,6 @@ form.addEventListener("submit", async (e) => {
 
   setLoading(true);
   try {
-    // 1) Create the account
     const res = await fetch(`${BACKEND_URL}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -103,7 +97,6 @@ form.addEventListener("submit", async (e) => {
       throw new Error(msg);
     }
 
-    // 2) Auto-login to get token
     const res2 = await fetch(`${BACKEND_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -128,7 +121,6 @@ form.addEventListener("submit", async (e) => {
       localStorage.removeItem("token");
     }
 
-    // 3) Redirect
     window.location.assign(getRedirectPath());
   } catch (err) {
     showError(err.message || "Something went wrong. Please try again.");
