@@ -28,15 +28,13 @@
     <header class="pc-header">
       <div class="wrap">
         <div class="logo-header">
-            <img src="LOGO-REG.PNG" width="40" height="40" alt="Description of the image">
-            <h1>Policy ⇄ Regulation Comparison</h1>
+          <img src="LOGO-REG.PNG" width="40" height="40" alt="logo">
+          <h1>Policy ⇄ Regulation Comparison</h1>
         </div>
-        <div class="search-navigate">
-          <nav class="top-links">
-            <a href="index.html" class="semi-bold-link">Clause Search</a>
-            <button id="logoutBtn" class="logout-btn" type="button" title="Log out">Log out</button>
-          </nav>
-        </div>
+        <nav class="top-links">
+          <a href="index.html"  class="semi-bold-link">Clause Search</a>
+          <button id="logoutBtn" class="logout-btn" type="button" title="Log out">Log out</button>
+        </nav>
       </div>
     </header>
 
@@ -45,23 +43,22 @@
         <form id="uploadForm">
           <div class="file-row">
             <input id="file" type="file" accept=".pdf,.docx,.txt" required />
-            <select id="method" title="Match method">
-              <option value="hybrid" selected>RAG (Hybrid)</option>
-              <option value="semantic">Semantic (verbatim)</option>
-              <option value="lexical">Lexical (verbatim)</option>
+            <select id="method" title="retrieval/generation mode">
+              <option value="hybrid" selected>Hybrid</option>
+              <option value="semantic">Semantic</option>
+              <option value="lexical">Lexical</option>
+              <option value="rag">RAG</option>
             </select>
-            <!-- Document selector -->
-            <select id="sources" title="Document sources">
-              <option value="all" selected>All</option>
+            <select id="sources" title="documents to search">
+              <option value="all" selected>Both</option>
               <option value="pdpl">PDPL</option>
               <option value="ecc">ECC</option>
             </select>
             <input id="topk" type="number" min="1" max="8" value="3" />
             <button class="btn btn-primary" type="submit">Compare</button>
-            <!-- NEW: Export -->
-            <button id="exportBtn" class="btn" type="button" title="Export as PDF" style="margin-left:.5rem;">Export PDF</button>
+            <button id="exportBtn" class="btn" type="button" title="Export PDF">Export PDF</button>
           </div>
-          <p class="hint">Upload a policy document (PDF/DOCX/TXT). We’ll match each section to PDPL/ECC clauses and ask Gemini to compare side-by-side.</p>
+          <p class="hint">Upload a policy (PDF/DOCX/TXT). We’ll match sections to PDPL/ECC and, for RAG, ask Gemini to summarize/cite.</p>
         </form>
         <div id="status" class="status"></div>
         <div id="error" class="error" role="alert"></div>
@@ -73,13 +70,12 @@
     <script src="./policy-compare.js"></script>
     <script>
       (function () {
-        function logout() {
-          localStorage.removeItem('token');
-          sessionStorage.removeItem('token');
+        function logout(){
+          localStorage.removeItem('token'); sessionStorage.removeItem('token');
           window.location.assign('login.html?from=policy-compare.html');
         }
         document.addEventListener('DOMContentLoaded', function () {
-          var btn = document.getElementById('logoutBtn');
+          const btn = document.getElementById('logoutBtn');
           if (btn) btn.addEventListener('click', logout);
         });
       })();

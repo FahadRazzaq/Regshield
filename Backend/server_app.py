@@ -1,13 +1,26 @@
+# server_app.py
+# Requirements:
+#   pip install fastapi uvicorn "sentence-transformers>=2.2" scikit-learn pdfplumber PyPDF2 python-dotenv google-generativeai
+
 import os, re, json, threading
 from dataclasses import dataclass, asdict
 from typing import List, Tuple
-from collections import Counter
-
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import numpy as np
+import mlflow
+import time
 
+# --- TF-IDF (true lexical retrieval in 0..1) ---
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import normalize
+
+# --- Embeddings (semantic / hybrid / rag retrieval) ---
+from sentence_transformers import SentenceTransformer
+
+# --- PDF parsing ---
 try:
     import PyPDF2
 except Exception:
@@ -17,10 +30,16 @@ try:
 except Exception:
     pdfplumber = None
 
+# --- .env ---
 from dotenv import load_dotenv, find_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = find_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(ENV_PATH, override=True)
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "")
+if MLFLOW_TRACKING_URI:
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment("regshield-rag-search")
 
 def resolve_env_or_default(key: str, default_filename: str) -> str:
     val = os.environ.get(key)
@@ -48,28 +67,25 @@ ALLOW_ORIGINS = os.getenv("ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
+# ---- Which PDFs we index ----
 PDFS = [
     (PDPL_PATH, "PDPL (Implementing Regulation)"),
     (ECC_PATH,  "NCA Essential Cybersecurity Controls (ECC-1:2018)"),
 ]
 
-# --- source helpers for filtering
+# ---- Source filters (UI 'sources' param) ----
 SOURCE_LABELS = {
     "pdpl": "PDPL (Implementing Regulation)",
-    "ecc": "NCA Essential Cybersecurity Controls (ECC-1:2018)",
+    "ecc":  "NCA Essential Cybersecurity Controls (ECC-1:2018)",
 }
 def parse_sources_param(s: str):
     if not s or s.lower().strip() in ("", "all", "*"):
         return None
     wanted = set()
     for part in re.split(r"[,;\s]+", s.strip()):
-        if not part:
-            continue
+        if not part: continue
         key = part.lower()
-        if key in SOURCE_LABELS:
-            wanted.add(SOURCE_LABELS[key])
-        else:
-            wanted.add(part)  # allow full labels
+        wanted.add(SOURCE_LABELS.get(key, part))
     return wanted
 
 def source_allowed(clause_source: str, allowed_set):
@@ -77,13 +93,12 @@ def source_allowed(clause_source: str, allowed_set):
         return True
     return clause_source in allowed_set
 
-# ---------- Read PDF ----------
+# ---------- PDF reading / clause splitting ----------
 def read_pdf_text(path: str) -> List[Tuple[int, str]]:
-    """Return list[(page_no, text)] with non-empty text (raw page text with line breaks)."""
+    """Return list[(page_no, text)] with non-empty text (raw page text)."""
     pages: List[Tuple[int, str]] = []
     if not os.path.exists(path):
         return pages
-
     if PyPDF2 is not None:
         try:
             with open(path, "rb") as f:
@@ -97,7 +112,6 @@ def read_pdf_text(path: str) -> List[Tuple[int, str]]:
                         pages.append((i + 1, t))
         except Exception:
             pass
-
     if not pages and pdfplumber is not None:
         try:
             with pdfplumber.open(path) as pdf:
@@ -107,7 +121,6 @@ def read_pdf_text(path: str) -> List[Tuple[int, str]]:
                         pages.append((i + 1, t))
         except Exception:
             pass
-
     return pages
 
 def normalize_whitespace(s: str) -> str:
@@ -115,13 +128,10 @@ def normalize_whitespace(s: str) -> str:
 
 def split_into_clauses_raw_norm(text: str) -> List[Tuple[str, str]]:
     """
-    Split PDF text into clauses and return list of (raw, norm) pairs:
-      - raw: original text chunk (line breaks largely preserved)
-      - norm: whitespace-normalized version for scoring/embeddings
+    Return (raw, norm) chunks. raw keeps original line breaks; norm is whitespace-normalized.
     """
     t = text.replace("\r", "")
     t = re.sub(r"\n{3,}", "\n\n", t)
-
     anchors = re.split(
         r"(?=^Article\s+\d+)|(?=^\d-\d-(?:\d|-){1,6}\b)|(?=^[A-Z][A-Za-z \-/()]{5,}\s+\d-\d\b)",
         t, flags=re.MULTILINE
@@ -150,14 +160,15 @@ def guess_reference(chunk: str, source_label: str) -> str:
     words = chunk.split()
     return " ".join(words[:8]) + ("..." if len(words) > 8 else "")
 
+# ---------- Data models ----------
 @dataclass
 class Clause:
     source: str
     filename: str
     page: int
     reference: str
-    text_raw: str
-    text_norm: str
+    text_raw: str   # verbatim
+    text_norm: str  # normalized
 
 class SearchResponseItem(BaseModel):
     source: str
@@ -174,6 +185,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResponseItem]
     answer_markdown: str | None = None
 
+# ---------- Index / cache ----------
 INDEX: List[Clause] = []
 INDEX_PATH = os.path.join(BASE_DIR, "index.json")
 
@@ -230,25 +242,44 @@ def ensure_index():
         INDEX = build_index()
         save_index_to_disk()
 
-def tokenize(s: str):
-    return re.findall(r"[a-z0-9]+", s.lower())
+# ---------- TF-IDF (lexical) ----------
+TFV: TfidfVectorizer | None = None
+TFIDF_MTX = None
+LEXICAL_READY = False
 
-def score_clause(clause: Clause, query_tokens, phrase: str) -> float:
-    tf = Counter(tokenize(clause.text_norm))
-    score = sum(tf.get(t, 0) for t in query_tokens)
-    if phrase and phrase in clause.text_norm.lower():
-        score += 3.0
-    ref = clause.reference.lower()
-    score += sum(1.5 for t in query_tokens if t in ref)
-    return float(score)
+def build_tfidf():
+    global TFV, TFIDF_MTX, LEXICAL_READY
+    ensure_index()
+    if not INDEX:
+        TFV, TFIDF_MTX, LEXICAL_READY = None, None, False
+        return
+    TFV = TfidfVectorizer(ngram_range=(1,2), stop_words="english", max_df=0.98)
+    X = TFV.fit_transform([c.text_norm for c in INDEX])
+    TFIDF_MTX = normalize(X, norm="l2", axis=1)  # L2-normalize for cosine
+    LEXICAL_READY = True
+    print(f"[tfidf] built TF-IDF: {TFIDF_MTX.shape}")
 
-import numpy as np
-from sentence_transformers import SentenceTransformer
+def ensure_tfidf():
+    if not LEXICAL_READY or TFV is None or TFIDF_MTX is None:
+        build_tfidf()
 
-EMBEDDER = None
+def search_lexical_tfidf(query: str, top_k: int, candidates: list[Clause]):
+    ensure_tfidf()
+    if TFV is None or TFIDF_MTX is None or not candidates:
+        return []
+    # restrict to candidate subset
+    cand_idx = [INDEX.index(c) for c in candidates]
+    sub = TFIDF_MTX[cand_idx]                                 # (M,D)
+    qv = normalize(TFV.transform([query]), norm="l2", axis=1) # (1,D)
+    sims = (sub @ qv.T).toarray().ravel()                     # (M,)
+    order = np.argsort(-sims)[:top_k]
+    return [(candidates[i], float(sims[i])) for i in order if sims[i] > 0]
+
+# ---------- Embeddings (semantic) ----------
+EMBEDDER: SentenceTransformer | None = None
 CLAUSE_EMB = None
 EMBED_DIM = 384
-EMB_PATH   = os.path.join(BASE_DIR, "embeddings.npy")
+EMB_PATH = os.path.join(BASE_DIR, "embeddings.npy")
 MODEL_NAME = "all-MiniLM-L6-v2"
 
 def get_embedder():
@@ -296,7 +327,7 @@ def ensure_embeddings():
         build_embeddings()
 
 def search_semantic_subset(query: str, candidates: List[Clause], top_k: int):
-    """Semantic scoring restricted to candidate subset; normalize to [0,1]."""
+    """Semantic scoring restricted to candidates; return scores mapped to [0,1]."""
     ensure_index()
     try:
         ensure_embeddings()
@@ -311,8 +342,10 @@ def search_semantic_subset(query: str, candidates: List[Clause], top_k: int):
     sims = [(c, float(CLAUSE_EMB[i] @ qv)) for c, i in zip(candidates, idx_map)]
     sims.sort(key=lambda x: x[1], reverse=True)
     sims = sims[:top_k]
-    return [(c, (s + 1.0) / 2.0) for c, s in sims]  # map to [0,1]
+    # map cosine [-1,1] to [0,1]
+    return [(c, (s + 1.0) / 2.0) for c, s in sims]
 
+# ---------- LLM (RAG generation) ----------
 def gemini_answer_from_results(query: str, items: list[SearchResponseItem]) -> str:
     if not GEMINI_API_KEY:
         return "_LLM disabled: set GEMINI_API_KEY_"
@@ -356,17 +389,20 @@ Return Markdown with:
     except Exception as e:
         return f"_Gemini error: {e}_"
 
+# ---------- API ----------
 from enum import Enum
 class Method(str, Enum):
-    lexical = "lexical"
-    semantic = "semantic"
-    hybrid = "hybrid"
+    lexical = "lexical"   # TF-IDF
+    semantic = "semantic" # MiniLM
+    hybrid = "hybrid"     # alpha blend
+    rag = "rag"           # semantic retrieve + LLM generate
 
+# CORS
 raw = ALLOW_ORIGINS or ""
 origins = ["*"] if raw.strip() == "*" else [o.strip() for o in re.split(r"[,;\s]+", raw) if o.strip()]
 print(f"[startup] ALLOW_ORIGINS parsed: {origins}")
 
-app = FastAPI(title="Regulation Clause Search API", version="0.6.0")
+app = FastAPI(title="Regulation Clause Search API", version="0.7.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -384,17 +420,22 @@ def _startup():
             build_embeddings()
         except Exception as e:
             print(f"[emb] background build failed: {e}")
+        try:
+            build_tfidf()
+        except Exception as e:
+            print(f"[tfidf] background build failed: {e}")
     threading.Thread(target=_bg, daemon=True).start()
 
 @app.get("/health")
 def health():
-    emb_ready = CLAUSE_EMB is not None and CLAUSE_EMB.size > 0
+    emb_ready = CLAUSE_EMB is not None and getattr(CLAUSE_EMB, "size", 0) > 0
     return {
         "status": "ok",
         "pdpl": os.path.exists(PDPL_PATH),
         "ecc": os.path.exists(ECC_PATH),
         "count": len(INDEX),
-        "embeddings_ready": emb_ready
+        "embeddings_ready": emb_ready,
+        "tfidf_ready": LEXICAL_READY
     }
 
 @app.get("/index")
@@ -420,69 +461,61 @@ def search(
         return SearchResponse(query=query, total_matches=0, returned=0, results=[], answer_markdown=None)
 
     if method == Method.lexical:
-        q_tokens = tokenize(query)
-        scored = []
-        for c in candidates:
-            s = score_clause(c, q_tokens, query.lower().strip())
-            if s > 0:
-                scored.append((c, s))
-        if scored:
-            max_s = max(s for _, s in scored) or 1.0
-            scored = [(c, s / max_s) for c, s in scored]  # normalize 0..1
-        scored.sort(key=lambda x: x[1], reverse=True)
+        scored = search_lexical_tfidf(query, top_k=top_k, candidates=candidates)
 
     elif method == Method.semantic:
         scored = search_semantic_subset(query, candidates, top_k=top_k)
 
-    else:
-        # Hybrid merge on candidates
-        q_tokens = tokenize(query)
-
-        # 1) lexical normalized
-        lex = []
-        for c in candidates:
-            s = score_clause(c, q_tokens, query.lower().strip())
-            if s > 0:
-                lex.append((c, s))
-        if lex:
-            max_lex = max(s for _, s in lex) or 1.0
-            lex = [(c, (s / max_lex)) for c, s in lex]
-
-        # 2) semantic normalized to 0..1 over candidates
-        sem = search_semantic_subset(query, candidates, top_k=max(80, top_k))
-
-        # 3) merge
-        combined = {}
-        for c, s in sem or []:
-            combined[id(c)] = combined.get(id(c), 0.0) + alpha * s
-        for c, s in lex or []:
-            combined[id(c)] = combined.get(id(c), 0.0) + (1.0 - alpha) * s
-
-        scored = [(c, combined[id(c)]) for c in candidates if id(c) in combined]
+    elif method == Method.hybrid:
+        # over-fetch a bit for a better union, then blend
+        lex = search_lexical_tfidf(query, top_k=max(5*top_k, 100), candidates=candidates) or []
+        sem = search_semantic_subset(query, candidates, top_k=max(5*top_k, 100)) or []
+        L = {id(c): s for c, s in lex}  # 0..1
+        S = {id(c): s for c, s in sem}  # 0..1
+        keys = set(L) | set(S)
+        id2 = {id(c): c for c in candidates}
+        scored = []
+        for k in keys:
+            ls = L.get(k, 0.0); ss = S.get(k, 0.0)
+            scored.append((id2[k], alpha*ss + (1.0-alpha)*ls))
         scored.sort(key=lambda x: x[1], reverse=True)
         scored = scored[:top_k]
+
+    else:  # Method.rag
+        # retrieval = semantic; generation = LLM
+        scored = search_semantic_subset(query, candidates, top_k=top_k)
 
     total = len(scored)
     top = scored[:top_k]
 
-    def pick_text(c: Clause) -> str:
-        # Lexical & Semantic: verbatim PDF; Hybrid: normalized (for LLM context)
-        if method in (Method.lexical, Method.semantic):
-            return c.text_raw
-        return c.text_norm
-
+    # Always show verbatim clause text in results
     results = [SearchResponseItem(
         source=c.source,
         filename=c.filename,
         page=c.page,
         reference=c.reference,
-        text=pick_text(c),
-        score=round(s, 3)
+        text=c.text_raw,
+        score=round(float(s), 3)
     ) for c, s in top]
 
     answer_md = None
-    if method == Method.hybrid and results:
+    if method == Method.rag and results:
         answer_md = gemini_answer_from_results(query, results)
+
+    if MLFLOW_TRACKING_URI:
+        try:
+            with mlflow.start_run(run_name=f"search-{method.value}"):
+                mlflow.log_param("method", method.value)
+                mlflow.log_param("top_k", top_k)
+                mlflow.log_param("sources", sources)
+                mlflow.log_param("embedding_model", MODEL_NAME)
+                mlflow.log_param("gemini_model", GEMINI_MODEL)
+                mlflow.log_metric("returned_results", len(results))
+                mlflow.log_metric("total_matches", total)
+                if results:
+                    mlflow.log_metric("top_score", float(results[0].score))
+        except Exception as e:
+            print(f"[mlflow] logging failed: {e}")
 
     return SearchResponse(
         query=query,
@@ -503,8 +536,14 @@ def reindex():
             os.remove(EMB_PATH)
     except Exception:
         pass
-    threading.Thread(target=build_embeddings, daemon=True).start()
+    # rebuild both in background
+    def _bg():
+        try: build_embeddings()
+        except Exception: pass
+        try: build_tfidf()
+        except Exception: pass
+    threading.Thread(target=_bg, daemon=True).start()
     return {"status": "ok", "count": len(INDEX)}
 
 if __name__ == "__main__":
-    uvicorn.run("server_app:app", host=APP_HOST, port=APP_PORT, reload=True)
+    uvicorn.run("server_app:app", host=APP_HOST, port=APP_PORT, reload=False)

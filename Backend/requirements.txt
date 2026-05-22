@@ -13,8 +13,8 @@ pydantic==2.9.2
 # PDF + NLP
 PyPDF2==3.0.1
 pdfplumber==0.11.4
-sentence-transformers==3.0.1
+sentence-transformers
 numpy==1.26.4
 flask-cors>=4.0.0
-
+mlflow
 google-generativeai>=0.7.2

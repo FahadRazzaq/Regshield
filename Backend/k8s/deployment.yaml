@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regshield
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: regshield
+  template:
+    metadata:
+      labels:
+        app: regshield
+    spec:
+      containers:
+      - name: regshield
+        image: 216812304036.dkr.ecr.eu-central-1.amazonaws.com/regshield-api:v2
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow-service.mlflow.svc.cluster.local:5000"
+        ports:
+        - containerPort: 5001
+        - containerPort: 8000
+        imagePullPolicy: Always

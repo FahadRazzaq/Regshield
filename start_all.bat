@@ -1,39 +1,44 @@
 @echo off
 setlocal enableextensions
 
-REM ---- paths ----
-set "BACKEND_DIR=D:\Freelance\RegShield\Regshield\Backend"
+set "BACKEND_DIR=C:\Users\hp\Downloads\Regshield\Backend"
 set "PY=%BACKEND_DIR%\.venv\Scripts\python.exe"
-
-REM ---- optional: force proxy to talk to this FastAPI URL ----
+set "MLFLOW=%BACKEND_DIR%\.venv\Scripts\mlflow.exe"
+set "MLFLOW_TRACKING_URI=http://127.0.0.1:5000"
 set "SEARCH_URL=http://127.0.0.1:8000"
 
-REM ---- 1) Start FastAPI (port 8000) ----
-start "FastAPI" cmd /c "cd /d %BACKEND_DIR% && "%PY%" server_app.py"
+start "MLflow" cmd /k "cd /d %BACKEND_DIR% && %MLFLOW% ui --host 127.0.0.1 --port 5000"
 
-REM ---- wait for FastAPI /health ----
-echo Waiting for FastAPI on http://127.0.0.1:8000/health ...
+echo Waiting MLflow...
+:wait_mlflow
+curl -fs http://127.0.0.1:5000 >nul 2>&1
+if errorlevel 1 (
+    timeout /t 1 >nul
+    goto wait_mlflow
+)
+
+start "FastAPI" cmd /k "cd /d %BACKEND_DIR% && %PY% server_app.py"
+
+echo Waiting FastAPI...
 :wait_fastapi
 curl -fs http://127.0.0.1:8000/health >nul 2>&1
 if errorlevel 1 (
-  timeout /t 1 >nul
-  goto wait_fastapi
+    timeout /t 1 >nul
+    goto wait_fastapi
 )
 
-REM ---- 2) Start Flask proxy/auth (port 5001) ----
-start "Flask" cmd /c "cd /d %BACKEND_DIR% && "%PY%" app.py"
+start "Flask" cmd /k "cd /d %BACKEND_DIR% && %PY% app.py"
 
-REM ---- wait for Flask /health (which proxies FastAPI /health) ----
-echo Waiting for Flask proxy on http://127.0.0.1:5001/health ...
+echo Waiting Flask...
 :wait_flask
 curl -fs http://127.0.0.1:5001/health >nul 2>&1
 if errorlevel 1 (
-  timeout /t 1 >nul
-  goto wait_flask
+    timeout /t 1 >nul
+    goto wait_flask
 )
 
-REM ---- 3) Open the UI served by Flask (same-origin, no CORS) ----
 start "" "http://127.0.0.1:5001/login.html"
+start "" "http://127.0.0.1:5000"
 
-echo All set. You can close this window.
+echo All set
 endlocal

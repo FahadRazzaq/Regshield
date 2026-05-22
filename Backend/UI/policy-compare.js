@@ -1,19 +1,15 @@
+// policy-compare.js
 const API = window.BACKEND_URL || "http://127.0.0.1:5001";
 const $ = (s) => document.querySelector(s);
 
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token");
 }
-function show(el, on = true) {
-  el.style.display = on ? "" : "none";
-}
+function show(el, on = true) { el.style.display = on ? "" : "none"; }
 function esc(s) {
   return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function renderMarkdown(md) {
@@ -21,7 +17,6 @@ function renderMarkdown(md) {
   const lines = String(md).replace(/\r/g, "").split("\n");
   const out = [];
   let i = 0;
-
   const inline = (txt) =>
     esc(txt)
       .replace(/`([^`]+)`/g, "<code>$1</code>")
@@ -31,42 +26,28 @@ function renderMarkdown(md) {
 
   while (i < lines.length) {
     let line = lines[i];
-
     if (/^```/.test(line)) {
-      let code = [];
-      i++;
-      while (i < lines.length && !/^```/.test(lines[i])) {
-        code.push(lines[i]);
-        i++;
-      }
+      let code = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
       if (i < lines.length) i++;
       out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
       continue;
     }
-
     const isTableHeader =
       /\|/.test(line) &&
       i + 1 < lines.length &&
       /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[i + 1]);
-
     if (isTableHeader) {
       const headerRow = line;
       const rows = [];
       i += 2;
       while (i < lines.length && /\|/.test(lines[i]) && !/^\s*$/.test(lines[i])) {
-        rows.push(lines[i]);
-        i++;
+        rows.push(lines[i]); i++;
       }
       const splitRow = (r) =>
-        r
-          .trim()
-          .replace(/^\|/, "")
-          .replace(/\|$/, "")
-          .split("|")
-          .map((c) => inline(c.trim()));
+        r.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => inline(c.trim()));
       const heads = splitRow(headerRow);
       const body = rows.map(splitRow);
-
       let tbl = `<table><thead><tr>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>`;
       for (const r of body) {
         const cells = r.length < heads.length ? r.concat(Array(heads.length - r.length).fill("")) : r;
@@ -76,56 +57,32 @@ function renderMarkdown(md) {
       out.push(tbl);
       continue;
     }
-
     if (/^\s*>\s?/.test(line)) {
       const block = [];
-      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
-        block.push(lines[i].replace(/^\s*>\s?/, ""));
-        i++;
-      }
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) { block.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
       out.push(`<blockquote>${inline(block.join("\n"))}</blockquote>`);
       continue;
     }
-
     if (/^#{1,6}\s+/.test(line)) {
       const level = (line.match(/^#+/) || ["#"])[0].length;
       const text = line.replace(/^#{1,6}\s+/, "");
-      i++;
-      out.push(`<h${level}>${inline(text)}</h${level}>`);
-      continue;
+      i++; out.push(`<h${level}>${inline(text)}</h${level}>`); continue;
     }
-
     if (/^\s*[-*+]\s+/.test(line)) {
       const items = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
-        i++;
-      }
-      out.push(`<ul>${items.map((x) => `<li>${inline(x)}</li>`).join("")}</ul>`);
-      continue;
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*+]\s+/, "")); i++; }
+      out.push(`<ul>${items.map((x) => `<li>${inline(x)}</li>`).join("")}</ul>`); continue;
     }
-
     if (/^\s*\d+\.\s+/.test(line)) {
       const items = [];
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
-        i++;
-      }
-      out.push(`<ol>${items.map((x) => `<li>${inline(x)}</li>`).join("")}</ol>`);
-      continue;
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+\.\s+/, "")); i++; }
+      out.push(`<ol>${items.map((x) => `<li>${inline(x)}</li>`).join("")}</ol>`); continue;
     }
-
     if (!/^\s*$/.test(line)) {
-      const para = [line];
-      i++;
-      while (i < lines.length && !/^\s*$/.test(lines[i])) {
-        para.push(lines[i]);
-        i++;
-      }
-      out.push(`<p>${inline(para.join(" "))}</p>`);
-      continue;
+      const para = [line]; i++;
+      while (i < lines.length && !/^\s*$/.test(lines[i])) { para.push(lines[i]); i++; }
+      out.push(`<p>${inline(para.join(" "))}</p>`); continue;
     }
-
     i++;
   }
   return out.join("\n");
@@ -142,40 +99,31 @@ const results = $("#results");
 const exportBtn = $("#exportBtn");
 
 // keep for export
-let LAST_COMPARE = null;   // entire backend response
+let LAST_COMPARE = null;
 let LAST_COMPARE_META = null;
 
-function setStatus(msg) {
-  statusBox.textContent = msg || "";
-}
-function setError(msg) {
-  errBox.textContent = msg || "";
-  show(errBox, !!msg);
-}
+function setStatus(msg) { statusBox.textContent = msg || ""; }
+function setError(msg) { errBox.textContent = msg || ""; show(errBox, !!msg); }
+
 function keepFirstTable(md) {
   if (!md) return "";
   const lines = String(md).replace(/\r/g, "").split("\n");
   let i = 0;
   while (i < lines.length) {
     const header = /^\s*\|.*\|\s*$/.test(lines[i]);
-    const sep = i + 1 < lines.length &&
-      /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[i + 1]);
+    const sep = i + 1 < lines.length && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[i + 1]);
     if (header && sep) break;
     i++;
   }
   if (i >= lines.length) return md;
-
   const out = [lines[i], lines[i + 1]];
   i += 2;
-  while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-    out.push(lines[i]);
-    i++;
-  }
+  while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { out.push(lines[i]); i++; }
   return out.join("\n");
 }
 
 function renderResults(payload) {
-  LAST_COMPARE = payload; // keep
+  LAST_COMPARE = payload;
   const items = Array.isArray(payload.items) ? payload.items : [];
   results.innerHTML = "";
 
@@ -185,7 +133,6 @@ function renderResults(payload) {
   }
 
   const frag = document.createDocumentFragment();
-
   for (const it of items) {
     const card = document.createElement("article");
     card.className = "card";
@@ -194,11 +141,7 @@ function renderResults(payload) {
     const policy = esc(it.policy_excerpt || "");
 
     const matches = (it.matches || []).map((m) => {
-      const refBits = [
-        m.source ? esc(m.source) : "-",
-        m.reference ? esc(m.reference) : "-",
-        `p.${esc(String(m.page ?? ""))}`,
-      ].join(" • ");
+      const refBits = [ esc(m.source || "-"), esc(m.reference || "-"), `p.${esc(String(m.page ?? ""))}`, esc(m.filename || "") ].join(" • ");
       const snippet = esc(String(m.text || "").slice(0, 1200)) + (m.text && m.text.length > 1200 ? "…" : "");
       return `
         <div>
@@ -228,10 +171,8 @@ function renderResults(payload) {
 
       <div class="markdown">${mdHtml}</div>
     `;
-
     frag.appendChild(card);
   }
-
   results.appendChild(frag);
 }
 
@@ -242,11 +183,7 @@ form.addEventListener("submit", async (e) => {
   results.innerHTML = "";
 
   const f = fileEl.files?.[0];
-  if (!f) {
-    setError("Please choose a file (.pdf, .docx, .txt).");
-    setStatus("");
-    return;
-  }
+  if (!f) { setError("Please choose a file (.pdf, .docx, .txt)."); setStatus(""); return; }
 
   const fd = new FormData();
   fd.append("file", f, f.name);
@@ -292,9 +229,7 @@ fileEl.addEventListener("change", () => {
   setError("");
   const f = fileEl.files?.[0];
   if (!f) return;
-  if (!/\.(pdf|docx|txt)$/i.test(f.name)) {
-    setError("Unsupported file type. Allowed: .pdf, .docx, .txt");
-  }
+  if (!/\.(pdf|docx|txt)$/i.test(f.name)) setError("Unsupported file type. Allowed: .pdf, .docx, .txt");
 });
 
 // -------- Export to PDF (Print) ----------
@@ -333,12 +268,7 @@ function buildPrintableHTML() {
 
   const secHtml = items.map((it) => {
     const matches = (it.matches || []).map((m) => {
-      const refBits = [
-        esc(m.source || "-"),
-        esc(m.reference || "-"),
-        `p.${esc(String(m.page ?? ""))}`,
-        esc(m.filename || "")
-      ].join(" • ");
+      const refBits = [ esc(m.source || "-"), esc(m.reference || "-"), `p.${esc(String(m.page ?? ""))}`, esc(m.filename || "") ].join(" • ");
       const snippet = esc(String(m.text || ""));
       return `
         <div style="margin-bottom:6px;">
@@ -348,8 +278,7 @@ function buildPrintableHTML() {
       `;
     }).join("");
 
-    const md = it.ai_comparison_markdown || "";
-    const mdHtml = renderMarkdown(md);
+    const mdHtml = renderMarkdown(it.ai_comparison_markdown || "");
 
     return `
       <div class="card">
@@ -378,11 +307,7 @@ function exportPDF() {
   if (!LAST_COMPARE) { alert("Run a comparison first."); return; }
   const html = buildPrintableHTML();
   const w = window.open("", "_blank");
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  w.focus();
+  w.document.open(); w.document.write(html); w.document.close(); w.focus();
   setTimeout(() => w.print(), 400);
 }
-
-exportBtn?.addEventListener("click", exportPDF);
+document.getElementById("exportBtn")?.addEventListener("click", exportPDF);

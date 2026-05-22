@@ -1,3 +1,4 @@
+// search.js
 const API_URL   = "http://127.0.0.1:5001";
 const LOGIN_PAGE = "login.html";
 
@@ -7,18 +8,14 @@ const topKInput = document.getElementById("topK");
 const methodSel = document.getElementById("method");
 const alphaInput = document.getElementById("alpha");
 const alphaHint = document.getElementById("alphaHint");
-const corpusSel = document.getElementById("corpus");
+const sourceSel = document.getElementById("source");
+
 const statText = document.getElementById("statText");
 const countPill = document.getElementById("countPill");
 const errBox = document.getElementById("err");
 const infoBox = document.getElementById("info");
 const answerBox = document.getElementById("llmAnswer");
 const resultsBox = document.getElementById("results");
-const exportBtn = document.getElementById("exportBtn");
-
-// keep last data for export
-let LAST_DATA = null;
-let LAST_META = null;
 
 function show(el, on = true){ el.style.display = on ? "" : "none"; }
 function setText(el, t){ el.textContent = t; }
@@ -74,23 +71,19 @@ form.addEventListener("submit", async (e) => {
   const topK = Math.max(5, Math.min(100, Number(topKInput.value) || 20));
   const method = methodSel.value;
   const alpha = Number(alphaInput.value);
-  const sources = (corpusSel?.value || "all");
+  const source = sourceSel.value; // all|pdpl|ecc
 
   try {
     const url = new URL(`${API_URL}/search`);
     url.searchParams.set("query", q);
     url.searchParams.set("top_k", String(topK));
     url.searchParams.set("method", method);
-    url.searchParams.set("sources", sources);
+    url.searchParams.set("sources", source);
     if (method === "hybrid") url.searchParams.set("alpha", String(alpha));
 
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-
-    // keep for export
-    LAST_DATA = data;
-    LAST_META = { q, topK, method, alpha, sources, when: new Date().toLocaleString() };
 
     if (data.answer_markdown) {
       answerBox.innerHTML = `
@@ -137,8 +130,12 @@ form.addEventListener("submit", async (e) => {
     });
     resultsBox.appendChild(frag);
 
-    const methodLabel = method === "hybrid" ? "RAG (Hybrid)" : method;
-    setText(statText, `Method: ${methodLabel}${method==="hybrid" ? ` (alpha=${alpha}, LLM=auto)` : ""} • Source: ${sources.toUpperCase()}`);
+    const methodLabel =
+      method === "rag" ? "RAG (LLM)"
+      : method === "hybrid" ? "Hybrid"
+      : method;
+
+    setText(statText, `Method: ${methodLabel}${method==="hybrid" ? ` (alpha=${alpha})` : ""} • Source: ${source.toUpperCase()}`);
     setText(countPill, `${Math.min(items.length, topK)} / ${total}`);
     show(countPill, true);
     show(infoBox, false);
@@ -151,78 +148,7 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
+// auto-run once
 window.addEventListener("DOMContentLoaded", () => {
   form.dispatchEvent(new Event("submit"));
 });
-
-// ---------- Export to PDF (Print) ----------
-function buildPrintableHTML() {
-  if (!LAST_DATA) return null;
-  const { q, topK, method, alpha, sources, when } = LAST_META || {};
-  const items = LAST_DATA.results || [];
-  const answer = LAST_DATA.answer_markdown ? renderMarkdown(LAST_DATA.answer_markdown) : "";
-
-  const style = `
-  <style>
-    @page { size: A4; margin: 18mm; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; }
-    h1,h2,h3 { margin: 0 0 .5rem; }
-    h1 { font-size: 20px; }
-    h2 { font-size: 16px; margin-top: 1.2rem; }
-    .meta { font-size: 12px; color:#555; margin-bottom: 12px; }
-    .answer { border:1px solid #e5e5e5; padding:10px; border-radius:6px; margin:10px 0 16px; }
-    .card { border:1px solid #e5e5e5; border-radius:8px; padding:10px; margin-bottom:10px; }
-    .rowtop { display:flex; justify-content:space-between; gap:8px; }
-    .badges { font-size:12px; color:#333; margin:6px 0; }
-    .badge { display:inline-block; border:1px solid #ccc; border-radius:999px; padding:2px 8px; margin-right:6px; }
-    pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    table { border-collapse: collapse; width: 100%; font-size: 12px; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; }
-    th { background: #f6f8fa; }
-    .small { font-size: 11px; color:#666; }
-  </style>`;
-
-  const header = `
-    <h1>Clause Search Export</h1>
-    <div class="meta">
-      <div><strong>Query:</strong> ${safe(q)}</div>
-      <div><strong>Method:</strong> ${method}${method==="hybrid" ? ` (alpha=${alpha})` : ""}</div>
-      <div><strong>Sources:</strong> ${safe(String(sources).toUpperCase())}</div>
-      <div class="small">Exported: ${safe(when || new Date().toLocaleString())}</div>
-    </div>
-  `;
-
-  const answerHtml = answer ? `<h2>RAG Answer</h2><div class="answer">${answer}</div>` : "";
-
-  const bodyCards = items.map((c, i) => `
-    <div class="card">
-      <div class="rowtop">
-        <strong>${i+1}. ${safe(c.source || "Source")}</strong>
-        <span class="small">score ${Number(c.score ?? 0).toFixed(2)}</span>
-      </div>
-      <div class="badges">
-        <span class="badge">${safe(c.reference || "—")}</span>
-        <span class="badge">p.${safe(String(c.page ?? ""))}</span>
-        <span class="badge">${safe(c.filename || "")}</span>
-      </div>
-      <div>${safe(c.text || "")}</div>
-    </div>
-  `).join("");
-
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Clause Search Export</title>${style}</head>
-  <body>${header}${answerHtml}<h2>Results (${items.length})</h2>${bodyCards}</body></html>`;
-}
-
-function exportPDF() {
-  if (!LAST_DATA) { alert("Run a search first."); return; }
-  const html = buildPrintableHTML();
-  const w = window.open("", "_blank");
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  // give layout a tick, then print
-  setTimeout(() => w.print(), 400);
-}
-
-exportBtn?.addEventListener("click", exportPDF);

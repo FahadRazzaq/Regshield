@@ -1,28 +1,24 @@
+# app.py
+import os, io, json, re, requests, mimetypes
+from typing import List, Dict, Any, Tuple
+from werkzeug.utils import secure_filename
+from flask import jsonify, request, Response, send_from_directory
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
 from config import create_app, db, jwt
 from auth_routes import auth_bp
-import models
-from typing import List, Dict, Any
-
-import os, requests
-from flask import jsonify, request, Response, send_from_directory
-
-import io
-import math
-import mimetypes
-from werkzeug.utils import secure_filename
+import models  # noqa: F401
 
 try:
     import pdfplumber
 except Exception:
     pdfplumber = None
-
 try:
     from docx import Document as DocxDocument
 except Exception:
     DocxDocument = None
 
 import google.generativeai as genai
-
 
 SEARCH_URL = os.getenv("SEARCH_URL", "http://127.0.0.1:8000")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -39,46 +35,29 @@ with app.app_context():
 UI_DIR = os.path.join(os.path.dirname(__file__), "UI")
 print("[ui] serving from:", UI_DIR)
 
+# ---------- UI routes ----------
 @app.route("/")
-def ui_root():
-    return send_from_directory(UI_DIR, "login.html")
-
+def ui_root(): return send_from_directory(UI_DIR, "login.html")
 @app.route("/login.html")
-def ui_login():
-    return send_from_directory(UI_DIR, "login.html")
-
+def ui_login(): return send_from_directory(UI_DIR, "login.html")
 @app.route("/index.html")
-def ui_index():
-    return send_from_directory(UI_DIR, "index.html")
-
-@app.route("/<path:path>")
-def ui_assets(path):
-    return send_from_directory(UI_DIR, path)
-
+def ui_index(): return send_from_directory(UI_DIR, "index.html")
 @app.route("/policy-compare.html")
-def ui_policy_compare():
-    return send_from_directory(UI_DIR, "policy-compare.html")
-
+def ui_policy_compare(): return send_from_directory(UI_DIR, "policy-compare.html")
 @app.route("/policy-compare.css")
-def ui_policy_compare_css():
-    return send_from_directory(UI_DIR, "policy-compare.css")
-
+def ui_policy_compare_css(): return send_from_directory(UI_DIR, "policy-compare.css")
 @app.route("/policy-compare.js")
-def ui_policy_compare_js():
-    return send_from_directory(UI_DIR, "policy-compare.js")
-
+def ui_policy_compare_js(): return send_from_directory(UI_DIR, "policy-compare.js")
 @app.route("/signup")
-def ui_signup_root():
-    return send_from_directory(UI_DIR, "signup.html")
-
+def ui_signup_root(): return send_from_directory(UI_DIR, "signup.html")
 @app.route("/signup.html")
-def ui_signup_html():
-    return send_from_directory(UI_DIR, "signup.html")
-
+def ui_signup_html(): return send_from_directory(UI_DIR, "signup.html")
 @app.route("/signup.js")
-def ui_signup_js():
-    return send_from_directory(UI_DIR, "signup.js")
+def ui_signup_js(): return send_from_directory(UI_DIR, "signup.js")
+@app.route("/<path:path>")
+def ui_assets(path): return send_from_directory(UI_DIR, path)
 
+# ---------- File readers ----------
 ALLOWED_EXTS = {"pdf", "docx", "txt"}
 
 def _ext(filename: str) -> str:
@@ -124,8 +103,7 @@ def extract_text_from_upload(filename: str, raw: bytes) -> str:
         return read_txt_bytes(raw)
     return ""
 
-from typing import List, Dict, Any, Tuple
-
+# ---------- Helpers ----------
 def _dedupe_matches(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
     best: Dict[Tuple[str, str, int], Dict[str, Any]] = {}
     for m in items or []:
@@ -135,14 +113,11 @@ def _dedupe_matches(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, A
     out = sorted(best.values(), key=lambda x: -float(x.get("score") or 0.0))
     return out[:max(1, limit)]
 
-import re
 def normalize_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
 
 def split_policy_into_sections(text: str) -> list[dict]:
-    """
-    Heuristic: split by H2-ish headings or blank lines; keep sections > 240 chars.
-    """
+    """Heuristic: split by headings/blank lines; keep sections > 240 chars."""
     t = text.replace("\r", "")
     tagged = re.sub(r"(?m)^(?P<h>([A-Z][A-Z0-9 ._-]{6,}|(\d+(\.\d+){0,3})[^\n]{0,60}))\s*$",
                     r"\n\n### \g<h>\n\n", t)
@@ -161,12 +136,8 @@ def split_policy_into_sections(text: str) -> list[dict]:
     return out
 
 def call_gemini_compare(policy_excerpt: str, matches: list[dict]) -> str:
-    """
-    Returns Markdown with a side-by-side style comparison table.
-    """
     if not GEMINI_API_KEY:
         return "_(Gemini disabled — set GEMINI_API_KEY)_"
-
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel(GEMINI_MODEL)
 
@@ -176,7 +147,7 @@ def call_gemini_compare(policy_excerpt: str, matches: list[dict]) -> str:
         reg_rows.append(f"- **{label}**\n  {m.get('text','')[:1200]}")
 
     prompt = f"""
-You are a compliance analyst.  Compare the POLICY EXCERPT with the matched REGULATORY CLAUSES.
+You are a compliance analyst. Compare the POLICY EXCERPT with the matched REGULATORY CLAUSES.
 Return concise Markdown with a single table only (no extra text before/after).
 
 Columns:
@@ -194,14 +165,13 @@ POLICY EXCERPT:
 REGULATORY CLAUSES:
 {chr(10).join(reg_rows)}
 """
-
     try:
         resp = model.generate_content(prompt)
         return (resp.text or "").strip() if hasattr(resp, "text") else str(resp).strip()
     except Exception as e:
         return f"_Gemini error: {e}_"
 
-
+# ---------- Auth error handlers ----------
 @jwt.unauthorized_loader
 def _missing_token(err): return jsonify({"msg": "Missing or invalid Authorization header."}), 401
 @jwt.invalid_token_loader
@@ -209,6 +179,7 @@ def _bad_token(err): return jsonify({"msg": "Invalid token."}), 401
 @jwt.expired_token_loader
 def _expired(h, p): return jsonify({"msg": "Token expired."}), 401
 
+# ---------- Proxy endpoints ----------
 @app.get("/search")
 def proxy_search():
     upstream = f"{SEARCH_URL}/search"
@@ -217,7 +188,8 @@ def proxy_search():
         return Response(r.content, status=r.status_code, content_type=r.headers.get("content-type", "application/json"))
     except requests.RequestException as e:
         app.logger.error("Upstream search failed (to %s): %s", upstream, e)
-        return Response(f'{"{"}"error":"upstream_unreachable","detail":"%s"' % str(e), 502, content_type="application/json")
+        return Response(json.dumps({"error":"upstream_unreachable","detail": str(e)}),
+                        502, content_type="application/json")
 
 @app.get("/health")
 def proxy_root_health():
@@ -225,25 +197,24 @@ def proxy_root_health():
         r = requests.get(f"{SEARCH_URL}/health", timeout=10)
         return Response(r.content, status=r.status_code, content_type=r.headers.get("content-type", "application/json"))
     except requests.RequestException as e:
-        return Response(f'{"{"}"status":"down","detail":"%s"' % str(e), 502, content_type="application/json")
+        return Response(json.dumps({"status":"down","detail": str(e)}),
+                        502, content_type="application/json")
 
-from flask_jwt_extended import jwt_required, get_jwt_identity
 @app.get('/protected/ping')
 @jwt_required()
 def protected_ping():
     return jsonify({"ok": True, "user_id": get_jwt_identity()}), 200
 
-from flask_jwt_extended import jwt_required
-
+# ---------- Compare Policy ----------
 @app.post("/compare/policy")
 @jwt_required()
 def compare_policy():
     """
     Multipart/form-data:
       - file: the uploaded policy (pdf, docx, txt)
-      - method (optional): lexical|semantic|hybrid (default hybrid)
+      - method (optional): lexical|semantic|hybrid|rag (default hybrid)
       - top_k (optional): int per section (default MAX_MATCHES_PER_SECTION)
-      - sources (optional): all|pdpl|ecc|comma-separated|full labels  <-- NEW
+      - sources (optional): all|pdpl|ecc|comma-separated|full labels
     """
     if "file" not in request.files:
         return jsonify({"error": "no_file", "msg": "Please upload a policy file."}), 400
@@ -258,14 +229,11 @@ def compare_policy():
     if len(text.strip()) < 50:
         return jsonify({"error": "empty_text", "msg": "Could not extract text from file."}), 422
 
-    sections = split_policy_into_sections(text)
-    if not sections:
-        sections = [{"id": 1, "title": None, "text": normalize_ws(text)}]
-
+    sections = split_policy_into_sections(text) or [{"id": 1, "title": None, "text": normalize_ws(text)}]
     sections = sections[:MAX_SECTIONS]
 
     method = request.form.get("method", "hybrid")
-    sources = request.form.get("sources", "all")  # NEW
+    sources = request.form.get("sources", "all")
     try:
         top_k = int(request.form.get("top_k", str(MAX_MATCHES_PER_SECTION)))
         top_k = max(1, min(8, top_k))
@@ -278,7 +246,7 @@ def compare_policy():
         try:
             r = requests.get(
                 f"{SEARCH_URL}/search",
-                params={"query": q, "top_k": top_k, "method": method, "alpha": 0.6, "sources": sources},  # NEW
+                params={"query": q, "top_k": top_k, "method": method, "alpha": 0.6, "sources": sources},
                 timeout=40,
                 headers={"Accept": "application/json"},
             )
@@ -319,6 +287,5 @@ def compare_policy():
         "items": compared,
     }), 200
 
-
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=False)

@@ -1,0 +1,40 @@
+name: RegShield CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: regshield-api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AZP7ZpeMfhtZWzCLea0CA+iTIAqNe37N0CT7rdmo }}
+          aws-secret-access-key: ${{ secrets.AKIATE6YFG2SJEE4DSEP }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t regshield-api:${{ github.sha }} ./Backend
+
+      - name: Tag Docker image
+        run: |
+          docker tag regshield-api:${{ github.sha }} ${{ secrets.216812304036 }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push ${{ secrets.216812304036 }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
