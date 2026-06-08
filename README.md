@@ -66,19 +66,19 @@ Full write-up: [From Uptime to Observability in a RAG System](https://medium.com
 ## Screenshots
 
 ### Search Interface
-![RegShield search interface]()
+![RegShield search interface](https://github.com/FahadRazzaq/Regshield/blob/main/assets/RegShield-search-interface.jpg)
 
 ### System Architecture
-![System architecture]()
+![System architecture](https://github.com/FahadRazzaq/Regshield/blob/main/assets/System%20Architecture.png)
 
 ### Grafana — Four Golden Signals Dashboard
-![Grafana observability dashboard]()
+![Grafana observability dashboard](https://github.com/FahadRazzaq/Regshield/blob/main/assets/Grafana%20Dashboard.png)
 
 ### MLflow — Experiment Tracking
-![MLflow dashboard]()
+![MLflow dashboard](https://github.com/FahadRazzaq/Regshield/blob/main/assets/mlflow-dashboard.jpg)
 
 ### Airflow — Pipeline DAG
-![Airflow DAG]()
+![Airflow DAG](https://github.com/FahadRazzaq/Regshield/blob/main/assets/Airflow-dag.jpg)
 
 ---
 
