@@ -83,7 +83,7 @@ Full write-up: [From Uptime to Observability in a RAG System](https://medium.com
 ---
 
 ## Project Structure
-
+---
 regshield/
 ├── app/
 │   ├── main.py              # FastAPI application
@@ -101,7 +101,6 @@ regshield/
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
-
 ---
 
 ## What Is Still Being Built
