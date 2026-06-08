@@ -40,4 +40,6 @@ Apache Airflow · Prometheus · Grafana · Gemini · Sentence Transformers
 
 ## Author
 
-Fahad Razzaq — [Medium](https://medium.com/@fahad.razzaq0701)
+Fahad Razzaq — Data and MLOps practitioner.  
+Writing on production reliability for AI systems at 
+[Medium](https://medium.com/@fahad.razzaq0701)
