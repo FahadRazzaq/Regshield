@@ -17,25 +17,25 @@ Apache Airflow · Prometheus · Grafana · Gemini · Sentence Transformers
 
 ### Search Interface
 
-<p align="center">
+<p align="left">
   <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/RegShield-search-interface.jpg" width="800">
 </p>
 
 ### System Architecture
 
-<p align="center">
+<p align="left">
   <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/System%20Architecture.png" width="800">
 </p>
 
 ### Grafana - Four Golden Signals Dashboard
 
-<p align="center">
+<p align="left">
   <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/Grafana%20Dashboard.png" width="800">
 </p>
 
 ### Airflow - Pipeline DAG
 
-<p align="center">
+<p align="left">
   <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/Airflow-dag.jpg" width="800">
 </p>
 
