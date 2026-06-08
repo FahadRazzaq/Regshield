@@ -16,19 +16,19 @@ Apache Airflow · Prometheus · Grafana · Gemini · Sentence Transformers
 ## Screenshots
 
 ### Search Interface
-![RegShield search interface](assets/regshield-search-interface.png)
+![RegShield search interface](https://github.com/FahadRazzaq/Regshield/blob/main/assets/RegShield-search-interface.jpg)
 
 ### System Architecture
-![System architecture](assets/system-architecture.png)
+![System architecture](https://github.com/FahadRazzaq/Regshield/blob/main/assets/System%20Architecture.png)
 
 ### Grafana — Four Golden Signals Dashboard
-![Grafana dashboard](assets/grafana-dashboard.png)
+![Grafana dashboard](https://github.com/FahadRazzaq/Regshield/blob/main/assets/Grafana%20Dashboard.png)
 
 ### MLflow — Experiment Tracking
-![MLflow dashboard](assets/mlflow-dashboard.png)
+![MLflow dashboard](https://github.com/FahadRazzaq/Regshield/blob/main/assets/mlflow-dashboard.jpg)
 
 ### Airflow — Pipeline DAG
-![Airflow DAG](assets/airflow-dag.png)
+![Airflow DAG](https://github.com/FahadRazzaq/Regshield/blob/main/assets/Airflow-dag.jpg)
 
 ---
 
