@@ -33,12 +33,6 @@ Apache Airflow · Prometheus · Grafana · Gemini · Sentence Transformers
   <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/Grafana%20Dashboard.png" width="800">
 </p>
 
-### MLflow - Experiment Tracking
-
-<p align="center">
-  <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/mlflow-dashboard.jpg" width="800">
-</p>
-
 ### Airflow - Pipeline DAG
 
 <p align="center">
