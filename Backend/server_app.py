@@ -12,15 +12,18 @@ import uvicorn
 import numpy as np
 import mlflow
 import time
-
+from prometheus_fastapi_instrumentator import Instrumentator
 # --- TF-IDF (true lexical retrieval in 0..1) ---
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
+from prometheus_client import Counter, Gauge
+import psutil
+import time
 
-# --- Embeddings (semantic / hybrid / rag retrieval) ---
+# Embeddings (semantic / hybrid / rag retrieval)
 from sentence_transformers import SentenceTransformer
 
-# --- PDF parsing ---
+# --- PDF parsing
 try:
     import PyPDF2
 except Exception:
@@ -35,6 +38,28 @@ from dotenv import load_dotenv, find_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = find_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(ENV_PATH, override=True)
+
+regshield_search_total = Counter(
+    "regshield_search_total",
+    "Total RegShield searches by mode",
+    ["search_mode"]
+)
+
+regshield_search_latency_seconds = Counter(
+    "regshield_search_latency_seconds_total",
+    "Total RegShield search latency seconds by mode",
+    ["search_mode"]
+)
+
+regshield_cpu_percent = Gauge(
+    "regshield_cpu_percent",
+    "RegShield CPU usage percent"
+)
+
+regshield_memory_percent = Gauge(
+    "regshield_memory_percent",
+    "RegShield memory usage percent"
+)
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "")
 if MLFLOW_TRACKING_URI:
@@ -403,6 +428,7 @@ origins = ["*"] if raw.strip() == "*" else [o.strip() for o in re.split(r"[,;\s]
 print(f"[startup] ALLOW_ORIGINS parsed: {origins}")
 
 app = FastAPI(title="Regulation Clause Search API", version="0.7.0")
+Instrumentator().instrument(app).expose(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -451,6 +477,7 @@ def search(
     alpha: float = Query(0.6, ge=0.0, le=1.0),
     sources: str = Query("all", description="Which documents to search: all | pdpl | ecc | comma-separated | full labels"),
 ):
+    start_time = time.time()
     ensure_index()
     if not INDEX:
         return SearchResponse(query=query, total_matches=0, returned=0, results=[], answer_markdown=None)
@@ -516,6 +543,13 @@ def search(
                     mlflow.log_metric("top_score", float(results[0].score))
         except Exception as e:
             print(f"[mlflow] logging failed: {e}")
+    elapsed = time.time() - start_time
+
+    regshield_search_total.labels(search_mode=method.value).inc()
+    regshield_search_latency_seconds.labels(search_mode=method.value).inc(elapsed)
+
+    regshield_cpu_percent.set(psutil.cpu_percent(interval=0.2))
+    regshield_memory_percent.set(psutil.virtual_memory().percent)
 
     return SearchResponse(
         query=query,
@@ -546,4 +580,4 @@ def reindex():
     return {"status": "ok", "count": len(INDEX)}
 
 if __name__ == "__main__":
-    uvicorn.run("server_app:app", host=APP_HOST, port=APP_PORT, reload=False)
+    uvicorn.run(app, host=APP_HOST, port=APP_PORT, reload=False)

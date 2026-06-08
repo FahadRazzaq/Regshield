@@ -10,11 +10,15 @@ services:
     image: prom/prometheus
     ports:
       - "9090:9090"
+    volumes: 
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml
 
   grafana:
     image: grafana/grafana
     ports:
       - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-image-renderer
 
   airflow:
     image: apache/airflow:2.9.1
