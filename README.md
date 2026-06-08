@@ -16,19 +16,34 @@ Apache Airflow · Prometheus · Grafana · Gemini · Sentence Transformers
 ## Screenshots
 
 ### Search Interface
-![RegShield search interface](https://github.com/FahadRazzaq/Regshield/blob/main/assets/RegShield-search-interface.jpg)
+
+<p align="center">
+  <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/RegShield-search-interface.jpg" width="800">
+</p>
 
 ### System Architecture
-![System architecture](https://github.com/FahadRazzaq/Regshield/blob/main/assets/System%20Architecture.png)
 
-### Grafana — Four Golden Signals Dashboard
-![Grafana dashboard](https://github.com/FahadRazzaq/Regshield/blob/main/assets/Grafana%20Dashboard.png)
+<p align="center">
+  <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/System%20Architecture.png" width="800">
+</p>
 
-### MLflow — Experiment Tracking
-![MLflow dashboard](https://github.com/FahadRazzaq/Regshield/blob/main/assets/mlflow-dashboard.jpg)
+### Grafana - Four Golden Signals Dashboard
 
-### Airflow — Pipeline DAG
-![Airflow DAG](https://github.com/FahadRazzaq/Regshield/blob/main/assets/Airflow-dag.jpg)
+<p align="center">
+  <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/Grafana%20Dashboard.png" width="800">
+</p>
+
+### MLflow - Experiment Tracking
+
+<p align="center">
+  <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/mlflow-dashboard.jpg" width="800">
+</p>
+
+### Airflow - Pipeline DAG
+
+<p align="center">
+  <img src="https://github.com/FahadRazzaq/Regshield/blob/main/assets/Airflow-dag.jpg" width="800">
+</p>
 
 ---
 
