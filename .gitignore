@@ -1,28 +1,18 @@
-# Python
 .venv/
+.venv_mlflow/
 __pycache__/
 *.pyc
-
-# Secrets
 .env
 Backend/.env
-
-# MLflow
+Backend/instance/
+Backend/mlflow.db
 mlruns/
 Backend/mlruns/
-
-# Grafana
 grafana-storage/
-
-# Airflow
 airflow/logs/
 airflow/plugins/__pycache__/
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Terraform
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
